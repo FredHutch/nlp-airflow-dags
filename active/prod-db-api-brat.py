@@ -66,7 +66,7 @@ def populate_blobid_in_job_table(**kwargs):
     (run_id, hdcpupdatedates) = kwargs['ti'].xcom_pull(task_ids='generate_job_id')
 
     # get record id to be processed
-    src_select_stmt = "SELECT TOP 10 hdcorcablobid FROM orca_ce_blob WHERE hdcpupdatedate = %s"
+    src_select_stmt = "SELECT TOP 1 hdcorcablobid FROM orca_ce_blob WHERE hdcpupdatedate = %s"
     tgt_insert_stmt = "INSERT INTO af_runs_details (af_runs_id, hdcpupdatedate, hdcorcablobid) VALUES (%s, %s, %s)"
 
     for hdcpupdatedate in hdcpupdatedates:
@@ -79,7 +79,10 @@ def send_notes_to_brat(**kwargs):
     ssh_hook = SSHHook(ssh_conn_id = "prod-brat")
     clinical_notes = kwargs['clinical_notes']
 
-    for (hdcorcablobid, notes) in clinical_notes.items():
+    for notes_items in clinical_notes:
+        hdcorcablobid = list(notes_items.keys())[0]
+        notes = notes_items[hdcorcablobid]
+
         # send original notes to brat
         remote_command = """
                          umask 002;
@@ -92,7 +95,7 @@ def send_notes_to_brat(**kwargs):
         """.format(
                 data=str(base64.b64encode(notes['original_note']['extract_text'].encode('utf-8'))).replace("b'","").replace("'",""),
                 remotePath=remotePath,
-                filename=hdcorcablobid
+                filename=hdcorcablobid[0]
                 )
 
         subprocess.call(["ssh", "-o StrictHostKeyChecking=no", "-p {}".format(ssh_hook.port), "{}@{}".format(ssh_hook.username, ssh_hook.remote_host), remote_command])
@@ -100,7 +103,7 @@ def send_notes_to_brat(**kwargs):
         # send annotated notes to brat
         phiAnnoData = []
         line = 0
-        for j in data['annotated_note']:
+        for j in notes['annotated_note']:
             if j['Category'] == 'PROTECTED_HEALTH_INFORMATION':
                 line += 1
                 phiAnnoData.append("T{}\t{} {} {}\t{}".format(line, j['Type'], j['BeginOffset'], j['EndOffset'], j['Text']))
@@ -116,7 +119,7 @@ def send_notes_to_brat(**kwargs):
                 """.format(
                     data=str(base64.b64encode("\r\n".join(phiAnnoData).encode('utf-8'))).replace("b'","").replace("'",""),
                     remotePath=remotePath,
-                    filename=hdcorcablobid
+                    filename=hdcorcablobid[0]
                 )
 
         subprocess.call(["ssh", "-p {}".format(ssh_hook.port), "{}@{}".format(ssh_hook.username, ssh_hook.remote_host), remote_command])
@@ -129,37 +132,38 @@ def annotate_clinical_notes(**kwargs):
 
     # get last update date
     (run_id, hdcpupdatedates) = kwargs['ti'].xcom_pull(task_ids='generate_job_id')
-    tgt_select_stmt = "SELECT hdcorcablobid FROM af_runs_details WHERE af_runs_id = %s and hdcupdatedate = %s and annotation_status is null"
-    src_select_stmt = "SELECT blob_contents FROM orca_ce_blob WHERE hdcupdatedate = %s and hdcorcablobid = %s"
+    tgt_select_stmt = "SELECT hdcorcablobid FROM af_runs_details WHERE af_runs_id = %s and hdcpupdatedate = %s and annotation_status is null"
+    src_select_stmt = "SELECT blob_contents FROM orca_ce_blob WHERE hdcpupdatedate = %s and hdcorcablobid = %s"
     tgt_update_stmt = "UPDATE af_runs_details SET annotation_status = %s, annotation_date = %s WHERE af_runs_id = %s and hdcpupdatedate = %s and hdcorcablobid in (%s)"
 
     for hdcpupdatedate in hdcpupdatedates:
 
         for blobid in pg_hook.get_records(tgt_select_stmt, parameters=(run_id,hdcpupdatedate)):
             batch_records = []
-            row_counts = 0
 
-            for row in mssql_hook.get_records(src_select_stmt, parameters=(hdcpupdatedate,blobid[0])):
+            for row in mssql_hook.get_records(src_select_stmt, parameters=(hdcpupdatedate,blobid)):
                 # record = { 'hdcorcablobid' : { 'original_note' : json, 'annotated_note' : json } }
                 record = {}
-                record[row[0]] = {}
-                row_counts = row_counts + 1
+                record[blobid] = {}
 
-                record[row[0]]['original_note'] = {"extract_text":"{}".format(row[1])}
+                record[blobid]['original_note'] = {"extract_text":"{}".format(row[0])}
                 try:
-                    resp = api_hook.run("/medlp/annotate/phi", data=json.dumps(record['original_note']), headers={"Content-Type":"application/json"})
-                    record[row[0]]['annotated_note'] = json.loads(resp.content)
+                    resp = api_hook.run("/medlp/annotate/phi", data=json.dumps(record[blobid]['original_note']), headers={"Content-Type":"application/json"})
+                    record[blobid]['annotated_note'] = json.loads(resp.content)
                     annotation_status = 'successful'
 
                     batch_records.append(record)
                 except Exception as e:
                     annotation_status = 'failed'
 
-                pg_hook.run(tgt_update_stmt, parameters(annotation_status, datetime.now(), run_id, hdcpupdatedate, blobid[0]))
+                pg_hook.run(tgt_update_stmt, parameters=(annotation_status, datetime.now(), run_id, hdcpupdatedate, blobid[0]))
 
                 if len(batch_records) == 500:
                     send_notes_to_brat(clinical_notes=batch_records)
                     batch_records = []
+
+        if len(batch_records) > 0:
+            send_notes_to_brat(clinical_notes=batch_records)
 
 
     tgt_update_stmt = "UPDATE af_runs SET job_end = %s, job_status = 'completed' WHERE af_runs_id = %s"
