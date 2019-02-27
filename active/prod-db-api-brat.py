@@ -75,13 +75,26 @@ def populate_blobid_in_job_table(**kwargs):
 
 
 def send_notes_to_brat(**kwargs):
-    remotePath = "/mnt/encrypted/brat-v1.3_Crunchy_Frog/data/nlp"
-    ssh_hook = SSHHook(ssh_conn_id = "prod-brat")
     clinical_notes = kwargs['clinical_notes']
+    datefolder = kwargs['datefolder']
+    remoteNlpHomePath = "/mnt/encrypted/brat-v1.3_Crunchy_Frog/data/nlp"
+    remoteNlpDataPath = "{}/{}".format(remoteNlpHomePath,datefolder)
+    ssh_hook = SSHHook(ssh_conn_id = "prod-brat")
 
+    record_processed = 0
     for notes_items in clinical_notes:
         hdcorcablobid = list(notes_items.keys())[0]
         notes = notes_items[hdcorcablobid]
+
+        # create a subfolder for hdcpupdatedate
+        if record_processed == 0:
+            remote_command = "[ -d {} ] && echo 'found'".format(remoteNlpDataPath)
+            is_datefolder_found=subprocess.getoutput("ssh {}@{} {}".format(ssh_hook.username, ssh_hook.remote_host, remote_command))
+
+            if is_datefolder_found != 'found':
+                remote_command = "mkdir {}".format(remoteNlpDataPath)
+                subprocess.call(["ssh", "-o StrictHostKeyChecking=no", "-p {}".format(ssh_hook.port), "{}@{}".format(ssh_hook.username, ssh_hook.remote_host), remote_command])
+
 
         # send original notes to brat
         remote_command = """
@@ -94,7 +107,7 @@ def send_notes_to_brat(**kwargs):
                          echo "{data}" | base64 -d - > {remotePath}/{filename}.txt;
         """.format(
                 data=str(base64.b64encode(notes['original_note']['extract_text'].encode('utf-8'))).replace("b'","").replace("'",""),
-                remotePath=remotePath,
+                remotePath=remoteNlpDataPath,
                 filename=hdcorcablobid[0]
                 )
 
@@ -108,21 +121,21 @@ def send_notes_to_brat(**kwargs):
                 line += 1
                 phiAnnoData.append("T{}\t{} {} {}\t{}".format(line, j['Type'], j['BeginOffset'], j['EndOffset'], j['Text']))
 
-                remote_command = """
-                         umask 002;
+        if len(phiAnnoData) > 0:
+            remote_command = """
+                     umask 002;
 
-                         if [[ -f {remotePath}/{filename}.ann ]]; then
-                           rm {remotePath}/{filename}.ann
-                         fi
-
-                         echo '{data}' | base64 -d -  >> {remotePath}/{filename}.ann;
-                """.format(
-                    data=str(base64.b64encode("\r\n".join(phiAnnoData).encode('utf-8'))).replace("b'","").replace("'",""),
-                    remotePath=remotePath,
-                    filename=hdcorcablobid[0]
-                )
+                     echo '{data}' | base64 -d -  > {remotePath}/{filename}.ann;
+            """.format(
+                data=str(base64.b64encode("\r\n".join(phiAnnoData).encode('utf-8'))).replace("b'","").replace("'",""),
+                remotePath=remoteNlpDataPath,
+                filename=hdcorcablobid[0]
+            )
+        else:
+            remote_command = "umask 002; touch {remotePath}/{filename}.ann;".format(remotePath=remoteNlpDataPath,filename=hdcorcablobid[0])
 
         subprocess.call(["ssh", "-p {}".format(ssh_hook.port), "{}@{}".format(ssh_hook.username, ssh_hook.remote_host), remote_command])
+        record_processed += 1
 
 
 def annotate_clinical_notes(**kwargs):
@@ -137,6 +150,9 @@ def annotate_clinical_notes(**kwargs):
     tgt_update_stmt = "UPDATE af_runs_details SET annotation_status = %s, annotation_date = %s WHERE af_runs_id = %s and hdcpupdatedate = %s and hdcorcablobid in (%s)"
 
     for hdcpupdatedate in hdcpupdatedates:
+
+        datefolder=hdcpupdatedate.strftime('%Y-%m-%d')
+        record_processed = 0
 
         for blobid in pg_hook.get_records(tgt_select_stmt, parameters=(run_id,hdcpupdatedate)):
             batch_records = []
@@ -158,12 +174,9 @@ def annotate_clinical_notes(**kwargs):
 
                 pg_hook.run(tgt_update_stmt, parameters=(annotation_status, datetime.now(), run_id, hdcpupdatedate, blobid[0]))
 
-                if len(batch_records) == 500:
-                    send_notes_to_brat(clinical_notes=batch_records)
-                    batch_records = []
+                send_notes_to_brat(clinical_notes=batch_records, datefolder=datefolder)
 
-        if len(batch_records) > 0:
-            send_notes_to_brat(clinical_notes=batch_records)
+                record_processed += 1
 
 
     tgt_update_stmt = "UPDATE af_runs SET job_end = %s, job_status = 'completed' WHERE af_runs_id = %s"
