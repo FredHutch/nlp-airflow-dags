@@ -17,7 +17,7 @@ args = {
     'retry_delay': timedelta(minutes=5),
 }
 
-dag = DAG(dag_id='prod_db_api_brat',
+dag = DAG(dag_id='prod-cortex-deid-notes-and-put-to-brat',
           default_args=args,
           dagrun_timeout=timedelta(seconds=30))
 
@@ -123,11 +123,12 @@ def send_notes_to_brat(**kwargs):
         phiAnnoData = []
         line = 0
         for j in notes['annotated_note']:
-            if j['Category'] == 'PROTECTED_HEALTH_INFORMATION':
+            if j['type'] is not 'O':
                 line += 1
                 phiAnnoData.append(
-                    "T{}\t{} {} {}\t{}".format(line, j['Type'], j['BeginOffset'], j['EndOffset'], j['Text']))
+                    "T{}\t{} {} {}\t{}".format(line, j['type'], j['start'], j['end'], j['text']))
 
+        full_file_name = "".join(map(str, [remoteNlpDataPath, "/", hdcorcablobid[0], ".ann"]))
         if len(phiAnnoData) > 0:
             remote_command = """
                      umask 002;
@@ -147,26 +148,26 @@ def send_notes_to_brat(**kwargs):
         '''
         insert update to table (to be made) for use to scan in next step
         '''
-        update_brat_db_status(run_id, hdcorcablobid[0], "PENDING REVIEW")
+        update_brat_db_status(hdcorcablobid[0],  full_file_name)
         record_processed += 1
 
-def update_brat_db_status(note_id, brat_status, job_date, directory_location):
+def update_brat_db_status(note_id, directory_location):
 
     pg_hook = PostgresHook(postgres_conn_id="prod-airflow-nlp-pipeline")
     tgt_insert_stmt = """
-    INSERT INTO brat_review_status (source_last_update_date, directory_location, job_start, job_status)
+    INSERT INTO brat_review_status (last_update_date, directory_location, job_start, job_status)
      VALUES (%s, %s, %s, 'PENDING REVIEW')
      """
 
     job_start_date = datetime.now()
     pg_hook.run(tgt_insert_stmt,
-                parameters=(run_id, job_start_date, directory_location, job_start_date))
+                parameters=(job_start_date, directory_location, job_start_date))
 
 
 def annotate_clinical_notes(**kwargs):
     pg_hook = PostgresHook(postgres_conn_id="prod-airflow-nlp-pipeline")
     mssql_hook = MsSqlHook(mssql_conn_id="prod-hidra-dz-db01")
-    api_hook = HttpHook(http_conn_id=' 	fh-nlp-api-deid', method='POST')
+    api_hook = HttpHook(http_conn_id='fh-nlp-api-deid', method='POST')
 
     # get last update date
     (run_id, hdcpupdatedates) = kwargs['ti'].xcom_pull(task_ids='generate_job_id')
@@ -189,13 +190,14 @@ def annotate_clinical_notes(**kwargs):
 
                 record[blobid]['original_note'] = {"extract_text": "{}".format(row[0])}
                 try:
-                    resp = api_hook.run("/medlp/annotate/phi", data=json.dumps(record[blobid]['original_note']),
+                    resp = api_hook.run("/deid/annotate", data=json.dumps(record[blobid]['original_note']),
                                         headers={"Content-Type": "application/json"})
                     record[blobid]['annotated_note'] = json.loads(resp.content)
                     annotation_status = 'successful'
 
                     batch_records.append(record)
                 except Exception as e:
+                    print("Exception occured: {}".format(e))
                     annotation_status = 'failed'
 
                 pg_hook.run(tgt_update_stmt,
