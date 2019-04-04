@@ -25,8 +25,45 @@ dag = DAG(dag_id='prod-cortex-pull-reviewed-notes-from-brat',
           dagrun_timeout=timedelta(seconds=30))
 
 
-def get_under_review_note_ids(**kwargs):
-    return _get_notes("PENDING REVIEW", ids_only=True)
+def scan_and_update_notes_for_completion(**kwargs):
+    remoteNlpHomePath = "/mnt/encrypted/brat-v1.3_Crunchy_Frog/data/nlp"
+
+    ssh_hook = SSHHook(ssh_conn_id="prod-brat")
+
+    #specifying it as a literal regex gets airflows ssh cmd recognize the wildcards in the filepath.
+    remote_command = r'egrep -l "^T[0-9]+[[:space:]]+.*REVIEW_COMPLETE" {location}/*/*.ann'.format(location=remoteNlpHomePath)
+
+    username = 'brat'
+    remote_host = 'nlp-cortex-brat'
+    complete_list = subprocess.getoutput(
+        "ssh {}@{} {}".format(username, remote_host, remote_command))
+
+    full_paths = []
+    for completed_annotation in complete_list.splitlines():
+        print("found path was: {}".format(completed_annotation))
+        full_paths.append(completed_annotation.strip())
+
+    _update_job_status_by_directory_loc(full_paths)
+
+    return
+
+
+def _update_job_status_by_directory_loc(directory_locations):
+    pg_hook = PostgresHook(postgres_conn_id="prod-airflow-nlp-pipeline")
+
+    print("{} notes to be updated for Extraction".format(len(directory_locations)))
+    update_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
+    sql_quote_escapes_locations = "'" + "','".join(directory_locations) + "'"
+    tgt_update_stmt = """
+                UPDATE brat_review_status 
+                SET job_status = 'EXTRACTION READY', last_update_date = '{date}' 
+                WHERE job_status like 'PENDING REVIEW'
+                  AND directory_location in ({locations})
+                """.format(date=update_time, locations=sql_quote_escapes_locations)
+
+    pg_hook.run(tgt_update_stmt)
+
+    return
 
 
 def _get_notes(status, ids_only=False):
@@ -50,7 +87,7 @@ def _get_notes(status, ids_only=False):
         print("No reviews with status: {status} found as of {date}".format(status=status, date=job_start_date))
         exit()
     print("{} notes to be checked for completion".format(len(hdcpupdatedates)))
-    return (1, hdcpupdatedates)
+    return (hdcpupdatedates)
 
 def _get_note_by_brat_id(brat_id):
     pg_hook = PostgresHook(postgres_conn_id="prod-airflow-nlp-pipeline")
@@ -65,20 +102,6 @@ def _get_note_by_brat_id(brat_id):
     #make the assumption that this will always return a unique record
     return pg_hook.get_records(src_select_stmt)[0]
 
-def scan_and_mark_notes_for_completion(**kwargs):
-    (run_id, review_note_ids) = kwargs['ti'].xcom_pull(task_ids='get_under_review_note_ids')
-    complete_notes = []
-    for review_note_id in review_note_ids:
-        review_note = _get_note_by_brat_id(review_note_id)
-        print(review_note)
-        print("scanning notes at location: {}".format(review_note[REVIEW_NOTES_COL['DIR_LOCATION']]))
-        is_complete = _scan_note_for_completion(review_note)
-        if is_complete:
-            mark_note_ready_for_extraction(review_note[REVIEW_NOTES_COL['BRAT_ID']])
-            complete_notes.append(review_note)
-
-    return complete_notes
-
 
 def _scan_note_for_completion(review_note):
     ssh_hook = SSHHook(ssh_conn_id="prod-brat")
@@ -92,10 +115,6 @@ def _scan_note_for_completion(review_note):
         "ssh {}@{} {}".format(ssh_hook.username, ssh_hook.remote_host, remote_command))
 
     return is_complete != 'found'
-
-
-def mark_note_ready_for_extraction(brat_id):
-    _update_note_status(brat_id, "EXTRACTION READY")
 
 
 def _update_note_status(brat_id, job_status):
@@ -113,7 +132,7 @@ def _update_note_status(brat_id, job_status):
 
 
 def save_and_mark_completed_note(**kwargs):
-    job_id, extraction_notes = _get_notes("EXTRACTION READY")
+    extraction_notes = _get_notes("EXTRACTION READY")
 
     for extraction_note in extraction_notes:
         reviewed_notation = _get_note_from_brat(extraction_note[REVIEW_NOTES_COL['DIR_LOCATION']])
@@ -131,17 +150,17 @@ def _translate_and_save_note(ann_annotation):
 
 
 def _translate_ann_to_json(ann_annotation):
-    pattern = re.compile(r"T(\d+)\s+([A-Z]+)\s+(\d+)\s+(\d+)\s+(\S)")
+    pattern = re.compile(r"T(\d+)\s+([A-Z]+)\s+(\d+)\s+(\d+)\s+([\S]+[\s\S]*)")
     dict_list = []
-    for line in ann_annotation:
+    for line in ann_annotation.splitlines():
         results = pattern.search(line)
-        print("line is: {}".format(line))
-        json_dict = {}
-        json_dict['type'] = results.group(2)
-        json_dict['start'] = results.group(3)
-        json_dict['end'] = results.group(4)
-        json_dict['text'] = results.group(5)
-        dict_list.append(json_dict)
+        if results is not None:
+            json_dict = {}
+            json_dict['type'] = results.group(2)
+            json_dict['start'] = results.group(3)
+            json_dict['end'] = results.group(4)
+            json_dict['text'] = results.group(5)
+            dict_list.append(json_dict)
 
     json_annotation = json.dumps(dict_list)
 
@@ -155,12 +174,11 @@ def _save_json_annotation(json_annotation):
 
 def _get_note_from_brat(note_location):
     ssh_hook = SSHHook(ssh_conn_id="prod-brat")
-
-    remote_command = """
-        cat {annotation_location}
-        """.format(annotation_location=note_location)
+    remote_command = 'cat {annotation_location}'.format(annotation_location=note_location)
+    username = 'brat'
+    remote_host = 'nlp-cortex-brat'
     reviewed_annotation_output = subprocess.getoutput(
-        "ssh {}@{} {}".format(ssh_hook.username, ssh_hook.remote_host, remote_command))
+        "ssh {}@{} {}".format(username, remote_host, remote_command))
 
     return reviewed_annotation_output
 
@@ -169,17 +187,13 @@ def _mark_review_completed(brat_id):
     return _update_note_status(brat_id, "REVIEW COMPLETE")
 
 
-get_under_review_note_ids = \
-    PythonOperator(task_id='get_under_review_note_ids',
+scan_and_update_notes_for_completion = \
+    PythonOperator(task_id='scan_and_update_notes_for_completion',
                    provide_context=True,
-                   python_callable=get_under_review_note_ids,
+                   python_callable=scan_and_update_notes_for_completion,
                    dag=dag)
 
-scan_and_mark_notes_for_completion = \
-    PythonOperator(task_id='scan_and_mark_notes_for_completion',
-                   provide_context=True,
-                   python_callable=scan_and_mark_notes_for_completion,
-                   dag=dag)
+
 
 save_and_mark_completed_note = \
     PythonOperator(task_id='save_and_mark_completed_note',
@@ -187,4 +201,4 @@ save_and_mark_completed_note = \
                    python_callable=save_and_mark_completed_note,
                    dag=dag)
 
-get_under_review_note_ids >> scan_and_mark_notes_for_completion >> save_and_mark_completed_note
+scan_and_update_notes_for_completion >> save_and_mark_completed_note

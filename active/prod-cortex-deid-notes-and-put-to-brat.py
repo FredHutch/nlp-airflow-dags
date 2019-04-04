@@ -145,9 +145,7 @@ def send_notes_to_brat(**kwargs):
 
         subprocess.call(["ssh", "-p {}".format(ssh_hook.port), "{}@{}".format(ssh_hook.username, ssh_hook.remote_host),
                          remote_command])
-        '''
-        insert update to table (to be made) for use to scan in next step
-        '''
+
         update_brat_db_status(hdcorcablobid[0],  full_file_name)
         record_processed += 1
 
@@ -155,13 +153,13 @@ def update_brat_db_status(note_id, directory_location):
 
     pg_hook = PostgresHook(postgres_conn_id="prod-airflow-nlp-pipeline")
     tgt_insert_stmt = """
-    INSERT INTO brat_review_status (last_update_date, directory_location, job_start, job_status)
-     VALUES (%s, %s, %s, 'PENDING REVIEW')
+    INSERT INTO brat_review_status (hdcorcablobid, last_update_date, directory_location, job_start, job_status)
+     VALUES (%s, %s, %s, %s, 'PENDING REVIEW')
      """
 
     job_start_date = datetime.now()
     pg_hook.run(tgt_insert_stmt,
-                parameters=(job_start_date, directory_location, job_start_date))
+                parameters=(note_id, job_start_date, directory_location, job_start_date))
 
 
 def annotate_clinical_notes(**kwargs):
