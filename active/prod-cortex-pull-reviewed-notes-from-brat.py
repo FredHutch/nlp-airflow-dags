@@ -33,10 +33,8 @@ def scan_and_update_notes_for_completion(**kwargs):
     #specifying it as a literal regex gets airflows ssh cmd recognize the wildcards in the filepath.
     remote_command = r'egrep -l "^T[0-9]+[[:space:]]+.*REVIEW_COMPLETE" {location}/*/*.ann'.format(location=remoteNlpHomePath)
 
-    username = 'brat'
-    remote_host = 'nlp-cortex-brat'
     complete_list = subprocess.getoutput(
-        "ssh {}@{} {}".format(username, remote_host, remote_command))
+        "ssh {}@{} {}".format(ssh_hook.username, ssh_hook.remote_host, remote_command))
 
     full_paths = []
     for completed_annotation in complete_list.splitlines():
@@ -175,10 +173,8 @@ def _save_json_annotation(json_annotation):
 def _get_note_from_brat(note_location):
     ssh_hook = SSHHook(ssh_conn_id="prod-brat")
     remote_command = 'cat {annotation_location}'.format(annotation_location=note_location)
-    username = 'brat'
-    remote_host = 'nlp-cortex-brat'
     reviewed_annotation_output = subprocess.getoutput(
-        "ssh {}@{} {}".format(username, remote_host, remote_command))
+        "ssh {}@{} {}".format(ssh_hook.username, ssh_hook.remote_host, remote_command))
 
     return reviewed_annotation_output
 
