@@ -64,6 +64,32 @@ def _update_job_status_by_directory_loc(directory_locations):
     return
 
 
+def _get_note_uid_by_directory_loc(directory_locations):
+    pg_hook = PostgresHook(postgres_conn_id="prod-airflow-nlp-pipeline")
+
+    print("{} notes to be updated for Extraction".format(len(directory_locations)))
+    update_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
+    if type(directory_locations) is list:
+        sql_quote_escapes_locations = "'" + "','".join(directory_locations) + "'"
+    else:
+        sql_quote_escapes_locations = "'"+directory_locations+"'"
+    tgt_select_stmt = """
+                SELECT hdcorcablobid, directory_location, brat_id, job_status 
+                FROM brat_review_status
+                WHERE directory_location in ({locations})
+                """.format(date=update_time, locations=sql_quote_escapes_locations)
+
+    dir_locs_to_note_uids = {}
+    print("uid selection statement is: {}".format(tgt_select_stmt))
+    for note in pg_hook.get_records(tgt_select_stmt):
+        print(note)
+        dir_locs_to_note_uids[note[1]] = note[0]
+
+    print("dir_locs_to_note_uids: {}".format(dir_locs_to_note_uids))
+
+    return dir_locs_to_note_uids
+
+
 def _get_notes(status, ids_only=False):
     pg_hook = PostgresHook(postgres_conn_id="prod-airflow-nlp-pipeline")
 
@@ -134,15 +160,16 @@ def save_and_mark_completed_note(**kwargs):
 
     for extraction_note in extraction_notes:
         reviewed_notation = _get_note_from_brat(extraction_note[REVIEW_NOTES_COL['DIR_LOCATION']])
-        _translate_and_save_note(reviewed_notation)
+        note_uids = _get_note_uid_by_directory_loc(extraction_note[REVIEW_NOTES_COL['DIR_LOCATION']])
+        _translate_and_save_note(note_uids[extraction_note[REVIEW_NOTES_COL['DIR_LOCATION']]], reviewed_notation)
         _mark_review_completed(extraction_note[REVIEW_NOTES_COL['BRAT_ID']])
 
     return
 
 
-def _translate_and_save_note(ann_annotation):
+def _translate_and_save_note(note_uid, ann_annotation):
     json_annotation = _translate_ann_to_json(ann_annotation)
-    _save_json_annotation(json_annotation)
+    _save_json_annotation(note_uid, json_annotation)
 
     return json_annotation
 
@@ -165,8 +192,12 @@ def _translate_ann_to_json(ann_annotation):
     return json_annotation
 
 
-def _save_json_annotation(json_annotation):
-
+def _save_json_annotation(note_uid, json_annotation):
+    mssql_hook = MsSqlHook(mssql_conn_id="nile")
+    tgt_insert_stmt = "INSERT INTO nlp_annotation.dbo.annotations (hdcorcablobid, category, date_created, date_modified, annotation) VALUES (%s, %s, %s, %s, %s)"
+    job_start_date = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
+    print("{}, {}, {}, {}".format(note_uid, 'BRAT REVIEWED ANNOTATION', job_start_date, json_annotation))
+    mssql_hook.run(tgt_insert_stmt, parameters=(note_uid, 'BRAT REVIEWED ANNOTATION', job_start_date, job_start_date, json_annotation), autocommit=True)
     return
 
 

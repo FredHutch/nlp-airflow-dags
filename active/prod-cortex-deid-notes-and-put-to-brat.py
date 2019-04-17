@@ -202,12 +202,20 @@ def annotate_clinical_notes(**kwargs):
                             parameters=(annotation_status, datetime.now(), run_id, hdcpupdatedate, blobid[0]))
 
                 send_notes_to_brat(clinical_notes=batch_records, datefolder=datefolder)
+                for record in batch_records:
+                    _save_json_annotation(blobid, record[blobid]['annotated_note'])
 
                 record_processed += 1
 
     tgt_update_stmt = "UPDATE af_runs SET job_end = %s, job_status = 'completed' WHERE af_runs_id = %s"
     pg_hook.run(tgt_update_stmt, parameters=(datetime.now(), run_id))
 
+def _save_json_annotation(note_uid, json_annotation):
+    mssql_hook = MsSqlHook(mssql_conn_id="nile")
+    tgt_insert_stmt = "INSERT INTO nlp_annotation.dbo.annotations (hdcorcaid, category, date_created, date_modified, annotation) VALUES (%s, %s, %s, %s, %s)"
+    job_start_date = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
+    mssql_hook.run(tgt_insert_stmt, parameters=(note_uid, 'DEID ANNOTATIONS', job_start_date, job_start_date, json_annotation), autocommit=True)
+    return
 
 generate_job_id = \
     PythonOperator(task_id='generate_job_id',
