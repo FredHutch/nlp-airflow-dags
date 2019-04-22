@@ -145,9 +145,7 @@ def send_notes_to_brat(**kwargs):
 
         subprocess.call(["ssh", "-p {}".format(ssh_hook.port), "{}@{}".format(ssh_hook.username, ssh_hook.remote_host),
                          remote_command])
-        '''
-        insert update to table (to be made) for use to scan in next step
-        '''
+
         update_brat_db_status(hdcorcablobid[0],  full_file_name)
         record_processed += 1
 
@@ -155,13 +153,13 @@ def update_brat_db_status(note_id, directory_location):
 
     pg_hook = PostgresHook(postgres_conn_id="prod-airflow-nlp-pipeline")
     tgt_insert_stmt = """
-    INSERT INTO brat_review_status (last_update_date, directory_location, job_start, job_status)
-     VALUES (%s, %s, %s, 'PENDING REVIEW')
+    INSERT INTO brat_review_status (hdcorcablobid, last_update_date, directory_location, job_start, job_status)
+     VALUES (%s, %s, %s, %s, 'PENDING REVIEW')
      """
 
     job_start_date = datetime.now()
     pg_hook.run(tgt_insert_stmt,
-                parameters=(job_start_date, directory_location, job_start_date))
+                parameters=(note_id, job_start_date, directory_location, job_start_date))
 
 
 def annotate_clinical_notes(**kwargs):
@@ -204,12 +202,20 @@ def annotate_clinical_notes(**kwargs):
                             parameters=(annotation_status, datetime.now(), run_id, hdcpupdatedate, blobid[0]))
 
                 send_notes_to_brat(clinical_notes=batch_records, datefolder=datefolder)
+                for record in batch_records:
+                    _save_json_annotation(blobid, record[blobid]['annotated_note'])
 
                 record_processed += 1
 
     tgt_update_stmt = "UPDATE af_runs SET job_end = %s, job_status = 'completed' WHERE af_runs_id = %s"
     pg_hook.run(tgt_update_stmt, parameters=(datetime.now(), run_id))
 
+def _save_json_annotation(note_uid, json_annotation):
+    mssql_hook = MsSqlHook(mssql_conn_id="nile")
+    tgt_insert_stmt = "INSERT INTO nlp_annotation.dbo.annotations (hdcorcaid, category, date_created, date_modified, annotation) VALUES (%s, %s, %s, %s, %s)"
+    job_start_date = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
+    mssql_hook.run(tgt_insert_stmt, parameters=(note_uid, 'DEID ANNOTATIONS', job_start_date, job_start_date, json_annotation), autocommit=True)
+    return
 
 generate_job_id = \
     PythonOperator(task_id='generate_job_id',
