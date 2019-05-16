@@ -82,8 +82,6 @@ def generate_job_id(**kwargs):
                       "     OR category = 'BRAT REVIEWED ANNOTATION')" \
                       "GROUP BY date_created "
 
-
-
     tgt_insert_stmt = "INSERT INTO af_resynthesis_runs (af_resynth_runs_id, source_last_update_date, record_counts, job_start, job_status) VALUES (%s, %s, %s, %s, 'running')"
 
     job_start_date = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
@@ -128,12 +126,13 @@ def _get_annotations_by_id_and_created_date(id, date):
     return common.ANNOTATIONS_DB.get_records(src_select_stmt, parameters=(date, id))
 
 
-def _call_resynthesis_api(blobid, deid_note, deid_annotations):
+def _call_resynthesis_api(blobid, deid_note, deid_annotations, deid_alias):
     api_hook = HttpHook(http_conn_id='fh-nlp-api-resynth', method='POST')
     results = None
     try:
         resp = api_hook.run("/resynthesize",
-                            data=json.dumps({"text": deid_note, "annotations": deid_annotations}),
+                            data=json.dumps({"text": deid_note, "annotations": deid_annotations,
+                                             "alias": deid_alias}),
                             headers={"Content-Type": "application/json"})
         results = json.loads(resp.content)
     except Exception as e:
@@ -178,6 +177,40 @@ def cast_start_end_as_int(json_data):
     return corrected_dict
 
 
+def _get_alias_data(patientId):
+    al_select_stmt = ("SELECT DateshiftDays, FirstName, MiddleName, LastName"
+                      " FROM PatientMap"
+                      " WHERE HdcPersonId = %s")
+    return common.SOURCE_NOTE_DB.get_records(al_select_stmt, parameters=(patientId,))
+
+
+def _get_patient_data(patientId):
+    pt_select_stmt = ("SELECT GivenName, MiddleName, FamilyName"
+                      " FROM PersonCurrentIdentifiers JOIN Common_Person"
+                      " ON PersonCurrentIdentifiers.HDCPersonID = Common_Person.HdcPersonID"
+                      " WHERE PersonCurrentIdentifiers.OrcaPersonID = %s")
+    return common.SOURCE_NOTE_DB.get_records(pt_select_stmt, parameters=(patientId,))
+
+
+def _get_note_metadata(blobId):
+    note_select_stmt = ("SELECT SERVICE_DT_TM, INSTITUTION, EVENT_CLASS_CD_DESCR, PERSON_ID"
+                        " FROM ORCA_CE_Blob JOIN ORCA_Clinical_Event"
+                        " ON ORCA_CE_Blob.CLINICAL_EVENT_ID = ORCA_Clinical_Event.CLINICAL_EVENT_ID"
+                        " WHERE ORCA_CE_Blob.HDCOrcaBlobID = %s")
+    return common.SOURCE_NOTE_DB.get_records(note_select_stmt, parameters=(blobId,))
+
+
+def _build_patient_alias_map(patientId):
+    dtshift, al_first, al_middle, al_last = _get_alias_data(patientId)
+    al_names = [al_first, al_middle, al_last]
+    rl_names = list(_get_patient_data(patientId))
+    alias_map = {'date_shift': dtshift, 'pt_names': {}}
+    for idx, name in enumerate(rl_names):
+        if name:
+            alias_map['pt_names'][name] = al_names[idx]
+    return alias_map
+
+
 def resynthesize_notes_marked_as_deid(**kwargs):
     # get last update date
     (run_id, hdcpupdatedates) = kwargs['ti'].xcom_pull(task_ids='generate_job_id')
@@ -191,13 +224,15 @@ def resynthesize_notes_marked_as_deid(**kwargs):
 
         for blobid in _get_resynth_run_details_id_by_date(run_id, hdcpupdatedate):
             blobid
+            servicedt, instit, cd_descr, patient_id = _get_note_metadata(blobid)
+            alias_map = _build_patient_alias_map(patient_id)
             batch_records = []
             for row in _get_annotations_by_id_and_created_date(blobid, hdcpupdatedate):
                 # record = { 'hdcorcablobid' : { 'original_note' : json, 'annotated_note' : json } }
                 record = {}
                 deid_note = _get_original_note_by_blobid(blobid)
                 corrected_dict = cast_start_end_as_int(json.loads(row[0]))
-                results = _call_resynthesis_api(blobid, deid_note, corrected_dict)
+                results = _call_resynthesis_api(blobid, deid_note, corrected_dict, alias_map)
                 resynth_status = 'failed'
                 if results is not None:
                     record[blobid] = results
