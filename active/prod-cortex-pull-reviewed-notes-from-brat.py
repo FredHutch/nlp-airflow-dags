@@ -172,7 +172,7 @@ def _translate_and_save_note(note_uid, ann_annotation):
         print("Exception occurred: {}".format(e))
         raise e
 
-    common.save_json_annotation(note_uid, json_annotation, 'BRAT REVIEWED ANNOTATION')
+    common.save_json_annotation(note_uid, str(json_annotation), 'BRAT REVIEWED ANNOTATION')
 
     return json_annotation
 

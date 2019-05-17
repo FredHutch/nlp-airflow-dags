@@ -31,7 +31,6 @@ def generate_job_id(**kwargs):
     if update_date_from_last_run == None:
         # first run
         update_date_from_last_run = datetime(1970, 1, 1).strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
-
     tgt_select_stmt = "SELECT max(af_runs_id) FROM af_runs"
     last_run_id = common.AIRFLOW_NLP_DB.get_first(tgt_select_stmt)[0]
 
@@ -63,6 +62,8 @@ def populate_blobid_in_job_table(**kwargs):
     (run_id, hdcpupdatedates) = kwargs['ti'].xcom_pull(task_ids='generate_job_id')
 
     # get record id to be processed
+    #TODO: presently we will only select the first note in the case of multiple notes with identical HDCPUpdateDates.
+    #TODO: Change this by removing TOP 1
     src_select_stmt = "SELECT TOP 1 hdcorcablobid FROM orca_ce_blob WHERE hdcpupdatedate = %s"
     tgt_insert_stmt = "INSERT INTO af_runs_details (af_runs_id, hdcpupdatedate, hdcorcablobid) VALUES (%s, %s, %s)"
 
@@ -197,7 +198,7 @@ def annotate_clinical_notes(**kwargs):
 
                 send_notes_to_brat(clinical_notes=batch_records, datefolder=datefolder)
                 for record in batch_records:
-                    common.save_json_annotation(blobid, record[blobid]['annotated_note'], 'DEID ANNOTATIONS')
+                    common.save_json_annotation(blobid, str(record[blobid]['annotated_note']), 'DEID ANNOTATIONS')
 
                 record_processed += 1
 

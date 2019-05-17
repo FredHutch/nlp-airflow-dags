@@ -24,49 +24,48 @@ dag = DAG(dag_id='prod-cortex-resynthesis-deid-notes',
           dagrun_timeout=timedelta(seconds=30))
 
 
-def _get_notes(status, ids_only=False):
-    first_status = status
-    additional_statuses = ""
-    if type(status) is list:
-        first_status = status[0]
-        rest = status[1:]
-        sql_statements = ["OR LIKE '{}'".format(stat) for stat in status[1:]]
-        additional_statuses = " ".join(sql_statements)
+def _insert_resynth_run_job(run_id, update_date, record_count, job_start_date):
+    tgt_insert_stmt = "INSERT INTO af_resynthesis_runs (af_resynth_runs_id, source_last_update_date, record_counts, job_start, job_status) VALUES (%s, %s, %s, %s, 'running')"
+    common.AIRFLOW_NLP_DB.run(tgt_insert_stmt, parameters=(run_id, update_date, record_count, job_start_date))
 
-    # get all job records that are ready to check for review completion
-    src_select_stmt = """
-                      SELECT hdcorcablobid, brat_id, directory_location, job_status 
-                      FROM brat_review_status 
-                      WHERE job_status like '{first_status}'
-                      {additional_statuses}
-                      """.format(first_status=first_status, additional_statuses=additional_statuses)
+    return
 
-    job_start_date = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
-    hdcpupdatedates = []
-    for row in common.AIRFLOW_NLP_DB.get_records(src_select_stmt):
-        if ids_only:
-            hdcpupdatedates.append(row[0])
-        else:
-            hdcpupdatedates.append(row)
-    if len(hdcpupdatedates) == 0:
-        print("No reviews with status: {status} found as of {date}".format(status=status, date=job_start_date))
-        exit()
-    print("{} notes to be checked for completion".format(len(hdcpupdatedates)))
 
-    return (hdcpupdatedates)
+def _get_annotations_since_date(update_date_from_last_run):
+    # get last update date from source since last successful run
+    # then pull record id with new update date from source
+    src_select_stmt = "SELECT date_created, count(*) " \
+                      "FROM annotations " \
+                      "WHERE date_created > %s " \
+                      "AND (category = 'BRAT REVIEWED ANNOTATION' " \
+                      "     OR category = 'BRAT REVIEWED ANNOTATION')" \
+                      "GROUP BY date_created "
 
+    return common.ANNOTATIONS_DB.get_records(src_select_stmt, parameters=update_date_from_last_run)
+
+
+
+def _get_last_resynth_run_id():
+    tgt_select_stmt = "SELECT max(af_resynth_runs_id) FROM af_resynthesis_runs"
+    last_run_id = common.AIRFLOW_NLP_DB.get_first(tgt_select_stmt)[0]
+
+    return last_run_id
+
+def _get_last_resynth_update_date():
+    tgt_select_stmt = "SELECT max(source_last_update_date) FROM af_resynthesis_runs WHERE job_status = 'completed' or job_status = 'running'"
+    update_date_from_last_run = common.AIRFLOW_NLP_DB.get_first(tgt_select_stmt)[0]
+
+    return update_date_from_last_run
 
 def generate_job_id(**kwargs):
     # get last update date from last completed run
-    tgt_select_stmt = "SELECT max(source_last_update_date) FROM af_resynthesis_runs WHERE job_status = 'completed' or job_status = 'running'"
-    update_date_from_last_run = common.AIRFLOW_NLP_DB.get_first(tgt_select_stmt)[0]
+    update_date_from_last_run = _get_last_resynth_update_date()
 
     if update_date_from_last_run == None:
         # first run
         update_date_from_last_run = datetime(1970, 1, 1).strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
 
-    tgt_select_stmt = "SELECT max(af_resynth_runs_id) FROM af_resynthesis_runs"
-    last_run_id = common.AIRFLOW_NLP_DB.get_first(tgt_select_stmt)[0]
+    last_run_id = _get_last_resynth_run_id()
 
     if last_run_id == None:
         new_run_id = 1
@@ -76,7 +75,7 @@ def generate_job_id(**kwargs):
     # get last update date from source since last successful run
     # then pull record id with new update date from source
     src_select_stmt = "SELECT date_created, count(*) " \
-                      "FROM nlp_annotation.dbo.annotations " \
+                      "FROM annotations " \
                       "WHERE date_created > %s " \
                       "AND (category = 'BRAT REVIEWED ANNOTATION' " \
                       "     OR category = 'BRAT REVIEWED ANNOTATION')" \
@@ -86,9 +85,9 @@ def generate_job_id(**kwargs):
 
     job_start_date = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
     hdcpupdatedates = []
-    for row in common.ANNOTATIONS_DB.get_records(src_select_stmt, parameters=update_date_from_last_run):
+    for row in _get_annotations_since_date(update_date_from_last_run):
         hdcpupdatedates.append(row[0])
-        common.AIRFLOW_NLP_DB.run(tgt_insert_stmt, parameters=(new_run_id, row[0], row[1], job_start_date))
+        common.insert_resynth_run_job(new_run_id, row[0], row[1], job_start_date)
 
     if len(hdcpupdatedates) == 0:
         print("No new records found since last update date: {}".format(update_date_from_last_run))
@@ -102,7 +101,7 @@ def populate_blobid_in_job_table(**kwargs):
     (run_id, hdcpupdatedates) = kwargs['ti'].xcom_pull(task_ids='generate_job_id')
 
     # get record id to be processed
-    src_select_stmt = "SELECT TOP 1 hdcorcablobid FROM nlp_annotation.dbo.annotations WHERE date_created = %s"
+    src_select_stmt = "SELECT TOP 1 hdcorcablobid FROM annotations WHERE date_created = %s"
     tgt_insert_stmt = "INSERT INTO af_resynthesis_runs_details (af_resynth_runs_id, hdcpupdatedate, hdcorcablobid) VALUES (%s, %s, %s)"
 
     for hdcpupdatedate in hdcpupdatedates:
@@ -118,7 +117,7 @@ def _get_resynth_run_details_id_by_date(run_id, date):
 
 
 def _get_annotations_by_id_and_created_date(id, date):
-    src_select_stmt = "SELECT annotation FROM nlp_annotation.dbo.annotations " \
+    src_select_stmt = "SELECT annotation FROM annotations " \
                       "WHERE date_created = %s and hdcorcablobid = %s " \
                       "AND (category = 'BRAT REVIEWED ANNOTATION' " \
                       "     OR category = 'BRAT REVIEWED ANNOTATION')"
@@ -142,12 +141,6 @@ def _call_resynthesis_api(blobid, deid_note, deid_annotations, deid_alias):
 
     return results
 
-def _get_original_note_by_blobid(blobid):
-    src_select_stmt = "SELECT blob_contents FROM orca_ce_blob WHERE  hdcorcablobid = %s"
-    results = common.SOURCE_NOTE_DB.get_first(src_select_stmt, parameters=(blobid))
-
-    #return blob_contents [0] from returned row
-    return results[0]
 
 def _update_job_id_as_complete(run_id):
     tgt_update_stmt = "UPDATE af_runs SET job_end = %s, job_status = 'completed' WHERE af_runs_id = %s"
@@ -230,7 +223,7 @@ def resynthesize_notes_marked_as_deid(**kwargs):
             for row in _get_annotations_by_id_and_created_date(blobid, hdcpupdatedate):
                 # record = { 'hdcorcablobid' : { 'original_note' : json, 'annotated_note' : json } }
                 record = {}
-                deid_note = _get_original_note_by_blobid(blobid)
+                deid_note = common.get_original_note_by_blobid(blobid)
                 corrected_dict = cast_start_end_as_int(json.loads(row[0]))
                 results = _call_resynthesis_api(blobid, deid_note, corrected_dict, alias_map)
                 resynth_status = 'failed'
