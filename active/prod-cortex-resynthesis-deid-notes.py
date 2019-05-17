@@ -178,7 +178,7 @@ def cast_start_end_as_int(json_data):
 
 
 def _get_alias_data(patientId):
-    al_select_stmt = ("SELECT DateshiftDays, FirstName, MiddleName, LastName"
+    al_select_stmt = ("SELECT FakeId, DateshiftDays, FirstName, MiddleName, LastName"
                       " FROM PatientMap"
                       " WHERE HdcPersonId = %s")
     return common.SOURCE_NOTE_DB.get_records(al_select_stmt, parameters=(patientId,))
@@ -201,14 +201,14 @@ def _get_note_metadata(blobId):
 
 
 def _build_patient_alias_map(patientId):
-    dtshift, al_first, al_middle, al_last = _get_alias_data(patientId)
+    fake_id, dtshift, al_first, al_middle, al_last = _get_alias_data(patientId)
     al_names = [al_first, al_middle, al_last]
     rl_names = list(_get_patient_data(patientId))
     alias_map = {'date_shift': dtshift, 'pt_names': {}}
     for idx, name in enumerate(rl_names):
         if name:
             alias_map['pt_names'][name] = al_names[idx]
-    return alias_map
+    return alias_map, fake_id
 
 
 def resynthesize_notes_marked_as_deid(**kwargs):
@@ -225,7 +225,7 @@ def resynthesize_notes_marked_as_deid(**kwargs):
         for blobid in _get_resynth_run_details_id_by_date(run_id, hdcpupdatedate):
             blobid
             servicedt, instit, cd_descr, patient_id = _get_note_metadata(blobid)
-            alias_map = _build_patient_alias_map(patient_id)
+            alias_map, fake_id = _build_patient_alias_map(patient_id)
             batch_records = []
             for row in _get_annotations_by_id_and_created_date(blobid, hdcpupdatedate):
                 # record = { 'hdcorcablobid' : { 'original_note' : json, 'annotated_note' : json } }
