@@ -242,8 +242,22 @@ def resynthesize_notes_marked_as_deid(**kwargs):
                 common.AIRFLOW_NLP_DB.run(tgt_update_stmt,
                             parameters=(resynth_status, datetime.now(), run_id, hdcpupdatedate, blobid[0]))
                 for record in batch_records:
-                    common.save_json_annotation(blobid, str(record[blobid]), 'RESYNTHESIZED ANNOTATIONS')
-
+                    try:
+                        # save json to db
+                        common.save_json_annotation(blobid, str(record[blobid]), 'RESYNTHESIZED ANNOTATIONS')
+                        file_to_s3 = json.dumps({'resynthesized_notes': record[blobid]['annotated_note'],
+                                                 'patient_pubid': fake_id,
+                                                 'service_date': servicedt,
+                                                 'institution': instit,
+                                                 'note_type':cd_descr})
+                        # save annotated notes to s3
+                        common.write_to_s3(filename=file_to_s3,
+                                           key='deid_test/annotated_note/{id}.json'.format(id=blobid),
+                                           bucket_name=S3_BUCKET_NAME)
+                    except Exception as e:
+                        print("Exception occurred: {}".format(e))
+                        time_of_error = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
+                        common.log_error_message(blobid, state='Save JSON annotation', time=time_of_error, error_message=str(e))
                 record_processed += 1
 
         _update_job_id_as_complete(run_id)
