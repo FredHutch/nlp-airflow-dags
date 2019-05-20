@@ -87,7 +87,7 @@ def generate_job_id(**kwargs):
     hdcpupdatedates = []
     for row in _get_annotations_since_date(update_date_from_last_run):
         hdcpupdatedates.append(row[0])
-        common.insert_resynth_run_job(new_run_id, row[0], row[1], job_start_date)
+        _insert_resynth_run_job(new_run_id, row[0], row[1], job_start_date)
 
     if len(hdcpupdatedates) == 0:
         print("No new records found since last update date: {}".format(update_date_from_last_run))
