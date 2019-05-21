@@ -66,10 +66,10 @@ def get_original_note_by_blobid(blobid):
 
 def write_to_s3(filename, key, bucket_name):
     """
-    create S3 hook, upload file to the bucket
+    create S3 hook, upload json object to the bucket
     :param filename: file to be dropped off
     :param key: file name shown on S3
     :param bucket_name: S3 bucket name
     """
-    S3.load_file(filename, key, bucket_name)
+    S3.put_object(Body=filename, Key=key, Bucket=bucket_name)
 
