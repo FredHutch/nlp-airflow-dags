@@ -178,21 +178,17 @@ def _translate_and_save_note(note_uid, ann_annotation):
 
 
 def _translate_ann_to_json(ann_annotation):
-    pattern = re.compile(r"T(\d+)\s+([A-Z]+)\s+(\d+)\s+(\d+)\s+([\S]+[\s\S]*)")
     dict_list = []
     for line in ann_annotation.splitlines():
-        results = pattern.search(line)
-        if results is not None:
-            json_dict = {}
-            json_dict['type'] = results.group(2)
-            json_dict['start'] = results.group(3)
-            json_dict['end'] = results.group(4)
-            json_dict['text'] = results.group(5)
-            dict_list.append(json_dict)
-
-    json_annotation = json.dumps(dict_list)
-
-    return json_annotation
+        if line and line.startswith('T'):
+            ann_parts = line.split('\t')
+            dict_list.append({
+                'type': ann_parts[1].split()[0].lower(),
+                'start': ann_parts[1].split()[1],
+                'end': ann_parts[1].split()[-1],
+                'text': ann_parts[2]
+            })
+    return json.dumps(dict_list)
 
 
 def _get_note_from_brat(note_location):
