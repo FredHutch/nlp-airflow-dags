@@ -64,7 +64,7 @@ def populate_blobid_in_job_table(**kwargs):
     # get record id to be processed
     #TODO: presently we will only select the first note in the case of multiple notes with identical HDCPUpdateDates.
     #TODO: Change this by removing TOP 1
-    src_select_stmt = "SELECT TOP 1 hdcorcablobid FROM orca_ce_blob WHERE hdcpupdatedate = %s"
+    src_select_stmt = "SELECT TOP 10 hdcorcablobid FROM orca_ce_blob WHERE hdcpupdatedate = %s"
     tgt_insert_stmt = "INSERT INTO af_runs_details (af_runs_id, hdcpupdatedate, hdcorcablobid) VALUES (%s, %s, %s)"
 
     for hdcpupdatedate in hdcpupdatedates:
