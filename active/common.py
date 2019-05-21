@@ -64,12 +64,13 @@ def get_original_note_by_blobid(blobid):
     return results[0]
 
 
-def write_to_s3(filename, key, bucket_name):
+def write_to_s3(string_payload, key):
     """
     create S3 hook, upload json object to the bucket
-    :param filename: file to be dropped off
+    :param string_payload: file to be dropped off
     :param key: file name shown on S3
-    :param bucket_name: S3 bucket name
     """
-    S3.put_object(Body=filename, Key=key, Bucket=bucket_name)
+    S3.load_string(string_payload,
+                   key,
+                   bucket_name=S3_BUCKET_NAME)
 

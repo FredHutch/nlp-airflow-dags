@@ -219,7 +219,8 @@ def resynthesize_notes_marked_as_deid(**kwargs):
     for hdcpupdatedate in hdcpupdatedates:
         record_processed = 0
 
-        for blobid in _get_resynth_run_details_id_by_date(run_id, hdcpupdatedate):
+        for id_record in _get_resynth_run_details_id_by_date(run_id, hdcpupdatedate):
+            blobid = id_record[0]
             servicedt, instit, cd_descr, patient_id = _get_note_metadata(blobid)
             if not patient_id:
                 err_msg = "No PatientID found for BlobID {}".format(blobid)
@@ -254,9 +255,8 @@ def resynthesize_notes_marked_as_deid(**kwargs):
                                                  'institution': instit,
                                                  'note_type':cd_descr})
                         # save annotated notes to s3
-                        common.write_to_s3(filename=file_to_s3.encode(),
-                                           key='deid_test/annotated_note/{id}.json'.format(id=blobid),
-                                           bucket_name=common.S3_BUCKET_NAME)
+                        common.write_to_s3(string_payload=file_to_s3,
+                                           key='deid_test/annotated_note/{id}.json'.format(id=blobid))
                     except Exception as e:
                         print("Exception occurred: {}".format(e))
                         time_of_error = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
