@@ -128,6 +128,8 @@ def _get_annotations_by_id_and_created_date(id, date):
 def _call_resynthesis_api(blobid, deid_note, deid_annotations, deid_alias):
     api_hook = HttpHook(http_conn_id='fh-nlp-api-resynth', method='POST')
     results = None
+    print("resynth post data for blob {}: {}".format(
+        blobid, {"text": deid_note, "annotations": deid_annotations, "alias": deid_alias}))
     try:
         resp = api_hook.run("/resynthesize",
                             data=json.dumps({"text": deid_note, "annotations": deid_annotations,
@@ -146,25 +148,28 @@ def _update_job_id_as_complete(run_id):
     tgt_update_stmt = "UPDATE af_runs SET job_end = %s, job_status = 'completed' WHERE af_runs_id = %s"
     common.AIRFLOW_NLP_DB.run(tgt_update_stmt, parameters=(datetime.now(), run_id))
 
-def cast_start_end_as_int(json_data):
+def cast_start_end_as_int(json_data, blobid):
     if isinstance(json_data, list):
         corrected_list = []
         for items in json_data:
-            corrected_list.append(cast_start_end_as_int(items))
+            corrected_list.append(cast_start_end_as_int(items, blobid))
         return corrected_list
 
     corrected_dict = {}
     for key, value in json_data.items():
         if isinstance(value, list):
-            value = [cast_start_end_as_int(item) if isinstance(item, dict) else item for item in value]
+            value = [cast_start_end_as_int(item, blobid) if isinstance(item, dict) else item for item in value]
         elif isinstance(value, dict):
-            value = cast_start_end_as_int(value)
+            value = cast_start_end_as_int(value, blobid)
         if key == 'start' or key == 'end':
             try:
-                print("casting '{}' to {} for key '{}' json".format(value, int(value), key))
+                # print("casting '{}' to {} for key '{}' json".format(value, int(value), key))
                 value = int(value)
             except Exception as ex:
-                pass
+                print("Exception occurred: {}".format(ex))
+                time_of_error = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
+                common.log_error_message(blobid, state='Load JSON annotations',
+                        time=time_of_error, error_message=str(ex))
         corrected_dict[key] = value
 
     return corrected_dict
@@ -198,7 +203,9 @@ def _get_note_metadata(blobId):
 
 def _build_patient_alias_map(patientId):
     alias_data = _get_alias_data(patientId)
+    print("alias data for patient {}: {}".format(patientId, alias_data))
     rl_names = _get_patient_data(patientId)
+    print("real names for patient {}: {}".format(patientId, rl_names))
     alias_map = {'pt_names': {}}
     if alias_data[1]:
         alias_map['date_shift'] = alias_data[1]
@@ -234,7 +241,7 @@ def resynthesize_notes_marked_as_deid(**kwargs):
                 # record = { 'hdcorcablobid' : { 'original_note' : json, 'annotated_note' : json } }
                 record = {}
                 deid_note = common.get_original_note_by_blobid(blobid)
-                corrected_dict = cast_start_end_as_int(json.loads(row[0]))
+                corrected_dict = cast_start_end_as_int(json.loads(row[0]), blobid)
                 results = _call_resynthesis_api(blobid, deid_note, corrected_dict, alias_map)
                 resynth_status = 'failed'
                 if results is not None:
