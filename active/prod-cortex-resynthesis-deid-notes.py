@@ -250,7 +250,7 @@ def resynthesize_notes_marked_as_deid(**kwargs):
                         common.save_json_annotation(blobid, str(record[blobid]), 'RESYNTHESIZED ANNOTATIONS')
                         file_to_s3 = json.dumps({'resynthesized_notes': record[blobid]['text'],
                                                  'patient_pubid': fake_id,
-                                                 'service_date': servicedt,
+                                                 'service_date': servicedt.strftime("%Y-%m-%d %H:%M:%S.%f")[:-3],
                                                  'institution': instit,
                                                  'note_type':cd_descr})
                         # save annotated notes to s3
