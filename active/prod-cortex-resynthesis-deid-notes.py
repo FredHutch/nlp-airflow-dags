@@ -254,7 +254,7 @@ def resynthesize_notes_marked_as_deid(**kwargs):
                                                  'institution': instit,
                                                  'note_type':cd_descr})
                         # save annotated notes to s3
-                        common.write_to_s3(filename=file_to_s3,
+                        common.write_to_s3(filename=file_to_s3.encode(),
                                            key='deid_test/annotated_note/{id}.json'.format(id=blobid),
                                            bucket_name=common.S3_BUCKET_NAME)
                     except Exception as e:
