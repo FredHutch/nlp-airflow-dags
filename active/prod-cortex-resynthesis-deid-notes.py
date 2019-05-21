@@ -177,8 +177,9 @@ def cast_start_end_as_int(json_data, blobid):
 
 def _get_alias_data(patientId):
     al_select_stmt = ("SELECT FakeId, DateshiftDays, FirstName, MiddleName, LastName"
-                      " FROM PatientMap"
-                      " WHERE HdcPersonId = %s")
+                      " FROM PatientMap JOIN PersonCurrentIdentifiers"
+                      " ON PersonCurrentIdentifiers.HDCPersonID = PatientMap.HdcPersonID"
+                      " WHERE PersonCurrentIdentifiers.OrcaPersonID = %s")
     return (common.SOURCE_NOTE_DB.get_first(al_select_stmt, parameters=(patientId,))
         or (None, None, None, None, None))
 
