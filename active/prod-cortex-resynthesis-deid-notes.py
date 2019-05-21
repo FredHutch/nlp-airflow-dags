@@ -256,7 +256,7 @@ def resynthesize_notes_marked_as_deid(**kwargs):
                         # save annotated notes to s3
                         common.write_to_s3(filename=file_to_s3,
                                            key='deid_test/annotated_note/{id}.json'.format(id=blobid),
-                                           bucket_name=S3_BUCKET_NAME)
+                                           bucket_name=common.S3_BUCKET_NAME)
                     except Exception as e:
                         print("Exception occurred: {}".format(e))
                         time_of_error = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
