@@ -248,7 +248,7 @@ def resynthesize_notes_marked_as_deid(**kwargs):
                     try:
                         # save json to db
                         common.save_json_annotation(blobid, str(record[blobid]), 'RESYNTHESIZED ANNOTATIONS')
-                        file_to_s3 = json.dumps({'resynthesized_notes': record[blobid]['annotated_note'],
+                        file_to_s3 = json.dumps({'resynthesized_notes': record[blobid]['text'],
                                                  'patient_pubid': fake_id,
                                                  'service_date': servicedt,
                                                  'institution': instit,
