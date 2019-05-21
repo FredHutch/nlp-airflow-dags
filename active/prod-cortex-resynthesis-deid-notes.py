@@ -174,7 +174,8 @@ def _get_alias_data(patientId):
     al_select_stmt = ("SELECT FakeId, DateshiftDays, FirstName, MiddleName, LastName"
                       " FROM PatientMap"
                       " WHERE HdcPersonId = %s")
-    return common.SOURCE_NOTE_DB.get_records(al_select_stmt, parameters=(patientId,))
+    return (common.SOURCE_NOTE_DB.get_first(al_select_stmt, parameters=(patientId,))
+        or (None, None, None, None, None))
 
 
 def _get_patient_data(patientId):
@@ -182,7 +183,8 @@ def _get_patient_data(patientId):
                       " FROM PersonCurrentIdentifiers JOIN Common_Person"
                       " ON PersonCurrentIdentifiers.HDCPersonID = Common_Person.HdcPersonID"
                       " WHERE PersonCurrentIdentifiers.OrcaPersonID = %s")
-    return common.SOURCE_NOTE_DB.get_records(pt_select_stmt, parameters=(patientId,))
+    return (common.SOURCE_NOTE_DB.get_first(pt_select_stmt, parameters=(patientId,))
+        or (None, None, None))
 
 
 def _get_note_metadata(blobId):
@@ -190,18 +192,20 @@ def _get_note_metadata(blobId):
                         " FROM ORCA_CE_Blob JOIN ORCA_Clinical_Event"
                         " ON ORCA_CE_Blob.CLINICAL_EVENT_ID = ORCA_Clinical_Event.CLINICAL_EVENT_ID"
                         " WHERE ORCA_CE_Blob.HDCOrcaBlobID = %s")
-    return common.SOURCE_NOTE_DB.get_records(note_select_stmt, parameters=(blobId,))
+    return (common.SOURCE_NOTE_DB.get_first(note_select_stmt, parameters=(blobId,))
+        or (None, None, None, None))
 
 
 def _build_patient_alias_map(patientId):
-    fake_id, dtshift, al_first, al_middle, al_last = _get_alias_data(patientId)
-    al_names = [al_first, al_middle, al_last]
-    rl_names = list(_get_patient_data(patientId))
-    alias_map = {'date_shift': dtshift, 'pt_names': {}}
+    alias_data = _get_alias_data(patientId)
+    rl_names = _get_patient_data(patientId)
+    alias_map = {'pt_names': {}}
+    if alias_data[1]:
+        alias_map['date_shift'] = alias_data[1]
     for idx, name in enumerate(rl_names):
-        if name:
-            alias_map['pt_names'][name] = al_names[idx]
-    return alias_map, fake_id
+        if name and alias_data[2:][idx]:
+            alias_map['pt_names'][name] = alias_data[2:][idx]
+    return alias_map, alias_data[0]
 
 
 def resynthesize_notes_marked_as_deid(**kwargs):
@@ -216,8 +220,14 @@ def resynthesize_notes_marked_as_deid(**kwargs):
         record_processed = 0
 
         for blobid in _get_resynth_run_details_id_by_date(run_id, hdcpupdatedate):
-            blobid
             servicedt, instit, cd_descr, patient_id = _get_note_metadata(blobid)
+            if not patient_id:
+                err_msg = "No PatientID found for BlobID {}".format(blobid)
+                print(err_msg)
+                time_of_error = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
+                common.log_error_message(blobid, state='Extract Blob/Patient Metadata',
+                                         time=time_of_error, error_message=err_msg)
+                continue
             alias_map, fake_id = _build_patient_alias_map(patient_id)
             batch_records = []
             for row in _get_annotations_by_id_and_created_date(blobid, hdcpupdatedate):
