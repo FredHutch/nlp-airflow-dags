@@ -251,7 +251,7 @@ def resynthesize_notes_marked_as_deid(**kwargs):
                     resynth_status = 'successful'
 
                 common.AIRFLOW_NLP_DB.run(tgt_update_stmt,
-                            parameters=(resynth_status, datetime.now(), run_id, hdcpupdatedate, blobid[0]))
+                            parameters=(resynth_status, datetime.now(), run_id, hdcpupdatedate, blobid))
                 for record in batch_records:
                     try:
                         # save json to db
