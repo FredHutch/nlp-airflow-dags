@@ -177,8 +177,8 @@ def annotate_clinical_notes(**kwargs):
                 # record = { 'hdcorcablobid' : { 'original_note' : json, 'annotated_note' : json } }
                 record = {}
                 record[blobid] = {}
-
-                record[blobid]['original_note'] = {"extract_text": "{}".format(row[0])}
+                record[blobid]['original_note'] = {"extract_text": "{}".format(row[0]),
+                                                   "annotation_by_source": True}
                 try:
                     resp = api_hook.run("/deid/annotate", data=json.dumps(record[blobid]['original_note']),
                                         headers={"Content-Type": "application/json"})
