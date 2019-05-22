@@ -182,7 +182,7 @@ def _translate_ann_to_json(ann_annotation):
     for line in ann_annotation.splitlines():
         if line and line.startswith('T'):
             ann_parts = line.split('\t')
-            if ann_parts[ann_parts[1].split()[0]] != 'REVIEW_COMPLETE':
+            if ann_parts[1].split()[0] != 'REVIEW_COMPLETE':
                 dict_list.append({
                     'type': ann_parts[1].split()[0].lower(),
                     'start': ann_parts[1].split()[1],
