@@ -229,7 +229,7 @@ def resynthesize_notes_marked_as_deid(**kwargs):
 
         for id_record in _get_resynth_run_details_id_by_date(run_id, hdcpupdatedate):
             blobid = id_record[0]
-            servicedt, instit, cd_descr, patient_id = _get_note_metadata(blobid)
+            servicedt, instit, cd_descr, patient_id = _get_note_metadata(blobid)            
             if not patient_id:
                 err_msg = "No PatientID found for BlobID {}".format(blobid)
                 print(err_msg)
@@ -238,6 +238,8 @@ def resynthesize_notes_marked_as_deid(**kwargs):
                                          time=time_of_error, error_message=err_msg)
                 continue
             alias_map, fake_id = _build_patient_alias_map(patient_id)
+            shifted_servicedt = servicedt + timedelta(days=(alias_map['date_shift'] or \
+                choice(list(range(-31, 0)) + list(range(1, 32)))))
             batch_records = []
             for row in _get_annotations_by_id_and_created_date(blobid, hdcpupdatedate):
                 # record = { 'hdcorcablobid' : { 'original_note' : json, 'annotated_note' : json } }
@@ -259,7 +261,7 @@ def resynthesize_notes_marked_as_deid(**kwargs):
                         common.save_json_annotation(blobid, str(record[blobid]), 'RESYNTHESIZED ANNOTATIONS')
                         file_to_s3 = json.dumps({'resynthesized_notes': record[blobid]['text'],
                                                  'patient_pubid': fake_id,
-                                                 'service_date': servicedt.strftime("%Y-%m-%d %H:%M:%S.%f")[:-3],
+                                                 'service_date': shifted_servicedt.strftime("%Y-%m-%d %H:%M:%S.%f")[:-3],
                                                  'institution': instit,
                                                  'note_type':cd_descr})
                         # save annotated notes to s3
