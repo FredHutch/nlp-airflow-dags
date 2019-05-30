@@ -238,8 +238,7 @@ def resynthesize_notes_marked_as_deid(**kwargs):
                                          time=time_of_error, error_message=err_msg)
                 continue
             alias_map, fake_id = _build_patient_alias_map(patient_id)
-            shifted_servicedt = servicedt + timedelta(days=(alias_map['date_shift'] or \
-                choice(list(range(-31, 0)) + list(range(1, 32)))))
+
             batch_records = []
             for row in _get_annotations_by_id_and_created_date(blobid, hdcpupdatedate):
                 # record = { 'hdcorcablobid' : { 'original_note' : json, 'annotated_note' : json } }
@@ -247,6 +246,7 @@ def resynthesize_notes_marked_as_deid(**kwargs):
                 deid_note = common.get_original_note_by_blobid(blobid)
                 corrected_dict = cast_start_end_as_int(json.loads(row[0]), blobid)
                 results = _call_resynthesis_api(blobid, deid_note, corrected_dict, alias_map)
+                shifted_servicedt = servicedt + timedelta(days=record[blobid]['alias']['date_shift'])
                 resynth_status = 'failed'
                 if results is not None:
                     record[blobid] = results
