@@ -15,7 +15,7 @@ __airflow_nlp_db_stage_dict = {"PROD": PostgresHook(postgres_conn_id="prod-airfl
                                "DEV": PostgresHook(postgres_conn_id="dev-airflow-nlp-pipeline")
                                }
 __annotations_db_stage_dict = {"PROD": MsSqlHook(mssql_conn_id="nile"),
-                               "DEV": MsSqlHook(mssql_conn_id="nile")
+                               "DEV": MsSqlHook(mssql_conn_id="test_nile")
                                }
 __s3_hook_stage_dict = {"PROD": S3Hook('fh-nlp-deid-s3'),
                         "DEV": S3Hook('fh-nlp-deid-s3')
@@ -72,5 +72,6 @@ def write_to_s3(string_payload, key):
     """
     S3.load_string(string_payload,
                    key,
-                   bucket_name=S3_BUCKET_NAME)
+                   bucket_name=S3_BUCKET_NAME,
+                   replace=False)
 

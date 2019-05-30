@@ -145,7 +145,7 @@ def _call_resynthesis_api(blobid, deid_note, deid_annotations, deid_alias):
 
 
 def _update_job_id_as_complete(run_id):
-    tgt_update_stmt = "UPDATE af_runs SET job_end = %s, job_status = 'completed' WHERE af_runs_id = %s"
+    tgt_update_stmt = "UPDATE af_resynthesis_runs SET job_end = %s, job_status = 'completed' WHERE af_resynth_runs_id = %s"
     common.AIRFLOW_NLP_DB.run(tgt_update_stmt, parameters=(datetime.now(), run_id))
 
 def cast_start_end_as_int(json_data, blobid):
@@ -243,14 +243,18 @@ def resynthesize_notes_marked_as_deid(**kwargs):
             for row in _get_annotations_by_id_and_created_date(blobid, hdcpupdatedate):
                 # record = { 'hdcorcablobid' : { 'original_note' : json, 'annotated_note' : json } }
                 record = {}
+                service_dts = {}
                 deid_note = common.get_original_note_by_blobid(blobid)
                 corrected_dict = cast_start_end_as_int(json.loads(row[0]), blobid)
                 results = _call_resynthesis_api(blobid, deid_note, corrected_dict, alias_map)
-                shifted_servicedt = servicedt + timedelta(days=record[blobid]['alias']['date_shift'])
+
+
+
                 resynth_status = 'failed'
                 if results is not None:
                     record[blobid] = results
                     batch_records.append(record)
+                    service_dts[blobid] = servicedt + timedelta(days=record[blobid]['alias']['date_shift'])
                     resynth_status = 'successful'
 
                 common.AIRFLOW_NLP_DB.run(tgt_update_stmt,
@@ -261,7 +265,7 @@ def resynthesize_notes_marked_as_deid(**kwargs):
                         common.save_json_annotation(blobid, str(record[blobid]), 'RESYNTHESIZED ANNOTATIONS')
                         file_to_s3 = json.dumps({'resynthesized_notes': record[blobid]['text'],
                                                  'patient_pubid': fake_id,
-                                                 'service_date': shifted_servicedt.strftime("%Y-%m-%d %H:%M:%S.%f")[:-3],
+                                                 'service_date': service_dts[blobid].strftime("%Y-%m-%d %H:%M:%S.%f")[:-3],
                                                  'institution': instit,
                                                  'note_type':cd_descr})
                         # save annotated notes to s3
