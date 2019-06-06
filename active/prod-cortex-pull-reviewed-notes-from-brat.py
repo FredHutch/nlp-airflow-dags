@@ -2,14 +2,14 @@ from datetime import datetime, timedelta
 import json
 import subprocess
 import base64
-import paramiko
 import re
 
-from airflow.hooks import HttpHook, MsSqlHook, PostgresHook
 from airflow.contrib.hooks.ssh_hook import SSHHook
-from airflow.operators import PythonOperator, BashOperator
+from airflow.operators import PythonOperator
 from airflow.models import DAG
-import common
+import utilities.common as common
+from utilities.common import BRAT_PENDING, BRAT_READY_TO_EXTRACT, BRAT_REVIEWED_ANNOTATION_TYPE, BRAT_COMPLETE
+
 
 REVIEW_NOTES_COL = {'BRAT_ID':0, 'DIR_LOCATION':1, 'JOB_STATUS':2}
 
@@ -53,10 +53,13 @@ def _update_job_status_by_directory_loc(directory_locations):
     sql_quote_escapes_locations = "'" + "','".join(directory_locations) + "'"
     tgt_update_stmt = """
                 UPDATE brat_review_status 
-                SET job_status = 'EXTRACTION READY', last_update_date = '{date}' 
-                WHERE job_status like 'PENDING REVIEW'
+                SET job_status = '{extract_status}', last_update_date = '{date}' 
+                WHERE job_status like '{review_status}'
                   AND directory_location in ({locations})
-                """.format(date=update_time, locations=sql_quote_escapes_locations)
+                """.format(extract_status=BRAT_READY_TO_EXTRACT,
+                           date=update_time,
+                           review_status=BRAT_PENDING,
+                           locations=sql_quote_escapes_locations)
 
     common.AIRFLOW_NLP_DB.run(tgt_update_stmt)
 
@@ -148,7 +151,7 @@ def _update_note_status(brat_id, job_status):
 
 
 def save_and_mark_completed_note(**kwargs):
-    extraction_notes = _get_notes("EXTRACTION READY")
+    extraction_notes = _get_notes(BRAT_READY_TO_EXTRACT)
 
     for extraction_note in extraction_notes:
         reviewed_notation = _get_note_from_brat(extraction_note[REVIEW_NOTES_COL['DIR_LOCATION']])
@@ -172,7 +175,7 @@ def _translate_and_save_note(note_uid, ann_annotation):
         print("Exception occurred: {}".format(e))
         raise e
 
-    common.save_json_annotation(note_uid, str(json_annotation), 'BRAT REVIEWED ANNOTATION')
+    common.save_json_annotation(note_uid, str(json_annotation), BRAT_REVIEWED_ANNOTATION_TYPE)
 
     return json_annotation
 
@@ -202,7 +205,7 @@ def _get_note_from_brat(note_location):
 
 
 def _mark_review_completed(brat_id):
-    return _update_note_status(brat_id, "REVIEW COMPLETE")
+    return _update_note_status(brat_id, BRAT_COMPLETE)
 
 
 scan_and_update_notes_for_completion = \
