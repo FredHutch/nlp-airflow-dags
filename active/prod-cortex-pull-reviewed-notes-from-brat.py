@@ -11,7 +11,8 @@ import utilities.common as common
 from utilities.common import BRAT_PENDING, BRAT_READY_TO_EXTRACT, BRAT_REVIEWED_ANNOTATION_TYPE, BRAT_COMPLETE
 
 
-REVIEW_NOTES_COL = {'BRAT_ID':0, 'DIR_LOCATION':1, 'JOB_STATUS':2}
+
+REVIEW_NOTES_COL = {'BRAT_ID':0, 'DIR_LOCATION':1, 'JOB_STATUS':2, 'HDCPUPDATEDATE':3}
 
 args = {
     'owner': 'whiteau',
@@ -66,34 +67,10 @@ def _update_job_status_by_directory_loc(directory_locations):
     return
 
 
-def _get_note_uid_by_directory_loc(directory_locations):
-    print("{} notes to be updated for Extraction".format(len(directory_locations)))
-    update_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
-    if type(directory_locations) is list:
-        sql_quote_escapes_locations = "'" + "','".join(directory_locations) + "'"
-    else:
-        sql_quote_escapes_locations = "'"+directory_locations+"'"
-    tgt_select_stmt = """
-                SELECT directory_location, hdcorcablobid, hdcpupdatedate, brat_id, job_status  
-                FROM brat_review_status
-                WHERE directory_location in ({locations})
-                """.format(date=update_time, locations=sql_quote_escapes_locations)
-
-    dir_locs_to_note_uids = {}
-    print("uid selection statement is: {}".format(tgt_select_stmt))
-    for note in common.AIRFLOW_NLP_DB.get_records(tgt_select_stmt):
-        print(note)
-        dir_locs_to_note_uids[note[0]] = (note[1], note[2])
-
-    print("dir_locs_to_note_uids: {}".format(dir_locs_to_note_uids))
-
-    return dir_locs_to_note_uids
-
-
 def _get_notes(status, ids_only=False):
     # get all job records that are ready to check for review completion
     src_select_stmt = """
-                      SELECT brat_id, directory_location, job_status 
+                      SELECT brat_id, directory_location, job_status, hdcpupdatedate 
                       FROM brat_review_status 
                       WHERE job_status like '{status}'
                       """.format(status=status)
@@ -155,16 +132,13 @@ def save_and_mark_completed_note(**kwargs):
 
     for extraction_note in extraction_notes:
         reviewed_notation = _get_note_from_brat(extraction_note[REVIEW_NOTES_COL['DIR_LOCATION']])
-        note_uids = _get_note_uid_by_directory_loc(extraction_note[REVIEW_NOTES_COL['DIR_LOCATION']])
-        hdcorcablobid = note_uids[extraction_note[REVIEW_NOTES_COL['DIR_LOCATION']]][0]
-        hdcpupdatedate = note_uids[extraction_note[REVIEW_NOTES_COL['DIR_LOCATION']]][1]
         try:
-            _translate_and_save_note(hdcorcablobid, hdcpupdatedate, reviewed_notation)
+            _translate_and_save_note(extraction_note[REVIEW_NOTES_COL['BRAT_ID']], reviewed_notation)
             _mark_review_completed(extraction_note[REVIEW_NOTES_COL['BRAT_ID']])
         except Exception as e:
             time_of_error = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
-            common.log_error_message(blobid=hdcorcablobid,
-                                     hdcpupdatedate=hdcpupdatedate,
+            common.log_error_message(blobid=extraction_note[REVIEW_NOTES_COL['BRAT_ID']],
+                                     hdcpupdatedate=extraction_note[REVIEW_NOTES_COL['HDCPUPDATEDATE']],
                                      state="Extract Review Complete Note",
                                      time=time_of_error,
                                      error_message=e)
