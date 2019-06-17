@@ -74,50 +74,51 @@ def generate_job_id(**kwargs):
     # get last update date from source since last successful run
     # then pull record id with new update date from source
     job_start_date = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
-    hdcpupdatedates = []
+    datecreated = []
     for row in _get_annotations_since_date(update_date_from_last_run):
-        hdcpupdatedates.append(row[0])
+        datecreated.append(row[0])
         _insert_resynth_run_job(new_run_id, row[0], row[1], job_start_date)
 
-    if len(hdcpupdatedates) == 0:
+    if len(datecreated) == 0:
         print("No new records found since last update date: {}".format(update_date_from_last_run))
         exit()
 
-    print("{} new update batches found since last update date: {}".format(len(hdcpupdatedates), update_date_from_last_run))
+    print("{} new update batches found since last update date: {}".format(len(datecreated), update_date_from_last_run))
 
-    return (new_run_id, hdcpupdatedates)
+    return (new_run_id, datecreated)
 
 
 def populate_blobid_in_job_table(**kwargs):
     # get last update date
-    (run_id, hdcpupdatedates) = kwargs['ti'].xcom_pull(task_ids='generate_job_id')
+    (run_id, datecreated) = kwargs['ti'].xcom_pull(task_ids='generate_job_id')
 
     # get record id to be processed
-    src_select_stmt = "SELECT DISTINCT hdcorcablobid FROM annotations WHERE date_created = %s"
+    src_select_stmt = "SELECT DISTINCT hdcorcablobid, hdcpupdatedate FROM annotations WHERE date_created = %s"
     # get completed jobs so that we do not repeat completed work
     screen_complete_stmt = "SELECT hdcorcablobid, hdcpupdatedate, resynth_date from af_resynthesis_runs_details  " \
                            "WHERE resynth_status = %s"
     complete_job_rows = common.AIRFLOW_NLP_DB.get_records(screen_complete_stmt, parameters=(JOB_COMPLETE,))
     complete_jobs = {(row[0], row[1]): row[2] for row in complete_job_rows}
 
-    tgt_insert_stmt = "INSERT INTO af_resynthesis_runs_details (af_resynth_runs_id, hdcpupdatedate, hdcorcablobid, resynth_status) " \
-                      "VALUES (%s, %s, %s, %s) "
+    tgt_insert_stmt = "INSERT INTO af_resynthesis_runs_details (af_resynth_runs_id, hdcpupdatedate, hdcorcablobid, annotation_creation_date, resynth_status) " \
+                      "VALUES (%s, %s, %s, %s, %s) "
 
 
-    for hdcpupdatedate in hdcpupdatedates:
-        for row in common.ANNOTATIONS_DB.get_records(src_select_stmt, parameters=(hdcpupdatedate,)):
-            if (row[0], hdcpupdatedate) in complete_jobs.keys():
-                print("Job for note {},{} has already been completed on {} . Skipping.".format(row[0],
-                                                                                               hdcpupdatedate,
+    for creation_date in datecreated:
+        for row in common.ANNOTATIONS_DB.get_records(src_select_stmt, parameters=(creation_date,)):
+            if (row[0], row[1]) in complete_jobs.keys():
+                print("Job for note {},{}  originally created on {} has already been completed on {} . Skipping.".format(row[0],
+                                                                                               row[1],
+                                                                                               creation_date,
                                                                                                complete_jobs[(row[0],
-                                                                                               hdcpupdatedate)]))
+                                                                                                              row[1])]))
                 continue
-            common.AIRFLOW_NLP_DB.run(tgt_insert_stmt, parameters=(run_id, hdcpupdatedate, row[0], JOB_RUNNING))
+            common.AIRFLOW_NLP_DB.run(tgt_insert_stmt, parameters=(run_id, row[1], row[0], creation_date, JOB_RUNNING))
 
 
-def _get_resynth_run_details_id_by_date(run_id, date):
-    tgt_select_stmt = "SELECT hdcorcablobid FROM af_resynthesis_runs_details " \
-                      "WHERE af_resynth_runs_id = %s and hdcpupdatedate = %s and resynth_status = %s"
+def _get_resynth_run_details_id_by_creation_date(run_id, date):
+    tgt_select_stmt = "SELECT hdcorcablobid, hdcpupdatedate FROM af_resynthesis_runs_details " \
+                      "WHERE af_resynth_runs_id = %s and annotation_creation_date = %s and resynth_status = %s"
 
     return common.AIRFLOW_NLP_DB.get_records(tgt_select_stmt, parameters=(run_id, date, JOB_RUNNING))
 
@@ -136,7 +137,7 @@ def _update_resynth_run_details_by_id_and_date(run_id, blobid, date, state):
 
     common.AIRFLOW_NLP_DB.run(tgt_update_stmt,
                               parameters=(
-                                  state, datetime.now(), run_id, date, blobid))
+                                  state, datetime.now(), run_id, date, blobid), autocommit=True)
 
 def _get_annotations_by_id_and_created_date(id, date):
     src_select_stmt = "SELECT annotation FROM annotations " \
@@ -168,7 +169,7 @@ def _call_resynthesis_api(blobid, hdcpupdatedate, deid_note, deid_annotations, d
 
 def _update_job_id_as_complete(run_id):
     tgt_update_stmt = "UPDATE af_resynthesis_runs SET job_end = %s, job_status = %s WHERE af_resynth_runs_id = %s"
-    common.AIRFLOW_NLP_DB.run(tgt_update_stmt, parameters=(datetime.now(), JOB_COMPLETE, run_id))
+    common.AIRFLOW_NLP_DB.run(tgt_update_stmt, parameters=(datetime.now(), JOB_COMPLETE, run_id), autocommit=True)
 
 def cast_start_end_as_int(json_data, blobid, hdcpupdatedate):
     if isinstance(json_data, list):
@@ -215,15 +216,6 @@ def _get_patient_data(patientId):
         or (None, None, None))
 
 
-def _get_note_metadata(blobId):
-    note_select_stmt = ("SELECT SERVICE_DT_TM, INSTITUTION, EVENT_CLASS_CD_DESCR, PERSON_ID"
-                        " FROM ORCA_CE_Blob JOIN ORCA_Clinical_Event"
-                        " ON ORCA_CE_Blob.CLINICAL_EVENT_ID = ORCA_Clinical_Event.CLINICAL_EVENT_ID"
-                        " WHERE ORCA_CE_Blob.HDCOrcaBlobID = %s")
-    return (common.SOURCE_NOTE_DB.get_first(note_select_stmt, parameters=(blobId,))
-        or (None, None, None, None))
-
-
 def _build_patient_alias_map(patientId):
     alias_data = _get_alias_data(patientId)
     print("alias data for patient {}: {}".format(patientId, alias_data))
@@ -240,34 +232,30 @@ def _build_patient_alias_map(patientId):
 
 def resynthesize_notes_marked_as_deid(**kwargs):
     # get last update date
-    (run_id, hdcpupdatedates) = kwargs['ti'].xcom_pull(task_ids='generate_job_id')
+    (run_id, createddate) = kwargs['ti'].xcom_pull(task_ids='generate_job_id')
 
-    for hdcpupdatedate in hdcpupdatedates:
-
-
-        for id_record in _get_resynth_run_details_id_by_date(run_id, hdcpupdatedate):
+    for creation_date in createddate:
+        for id_record in _get_resynth_run_details_id_by_creation_date(run_id, creation_date):
             record_processed = 0
             blobid = id_record[0]
-            servicedt, instit, cd_descr, patient_id = _get_note_metadata(blobid)            
-            if not patient_id:
-                err_msg = "No PatientID found for BlobID {}".format(blobid)
-                print(err_msg)
-                time_of_error = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
-                common.log_error_message(blobid, hdcpupdatedate=hdcpupdatedate, state='Extract Blob/Patient Metadata',
-                                         time=time_of_error, error_message=err_msg)
-                _update_resynth_run_details_to_failed(run_id, blobid, hdcpupdatedate)
+            hdcpupdatedate = id_record[1]
+            note_metadata = common.get_note_from_temp(blobid, hdcpupdatedate)
+            if not note_metadata["patient_id"]:
+                message = "No PatientID found for BlobID {}".format(blobid)
+                common.log_error_and_failure_for_resynth_note_job(run_id, blobid, hdcpupdatedate, message,
+                                                          "Extract Blob/Patient Metadata")
                 continue
 
-            alias_map, fake_id = _build_patient_alias_map(patient_id)
+            alias_map, fake_id = _build_patient_alias_map(note_metadata["patient_id"])
             batch_records = []
 
-            for row in _get_annotations_by_id_and_created_date(blobid, hdcpupdatedate):
+            for row in _get_annotations_by_id_and_created_date(blobid, creation_date):
                 # record = { 'hdcorcablobid' : { 'original_note' : json, 'annotated_note' : json } }
                 record = {}
                 service_dts = {}
-                deid_note = common.get_original_note_by_blobid(blobid)
                 corrected_dict = cast_start_end_as_int(json.loads(row[0]), blobid, hdcpupdatedate)
-                results = _call_resynthesis_api(blobid, hdcpupdatedate, deid_note, corrected_dict, alias_map)
+                results = _call_resynthesis_api(blobid, hdcpupdatedate, note_metadata["blob_contents"], corrected_dict,
+                                                alias_map)
 
                 if results is None:
                     print("No resynthesis results returned for id: {id}".format(id=blobid))
@@ -276,17 +264,17 @@ def resynthesize_notes_marked_as_deid(**kwargs):
 
                 record[blobid] = results
                 batch_records.append(record)
-                service_dts[blobid] = servicedt + timedelta(days=record[blobid]['alias']['date_shift'])
+                service_dts[blobid] = note_metadata["servicedt"] + timedelta(days=record[blobid]['alias']['date_shift'])
 
             for record in batch_records:
                 try:
                     # save json to db
-                    common.save_resynthesis_annotation(blobid, str(record[blobid]))
+                    common.save_resynthesis_annotation(blobid, hdcpupdatedate, str(record[blobid]))
                     file_to_s3 = json.dumps({'resynthesized_notes': record[blobid]['text'],
                                              'patient_pubid': fake_id,
                                              'service_date': service_dts[blobid].strftime("%Y-%m-%d %H:%M:%S.%f")[:-3],
-                                             'institution': instit,
-                                             'note_type':cd_descr})
+                                             'institution': note_metadata["instit"],
+                                             'note_type':note_metadata["cd_descr"]})
                     # save annotated notes to s3
                     common.write_to_s3(blobid,
                                        hdcpupdatedate,
@@ -300,9 +288,8 @@ def resynthesize_notes_marked_as_deid(**kwargs):
                                              error_message=str(e))
                 except Exception as e:
                     print("Exception occurred: {}".format(e))
-                    time_of_error = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
-                    common.log_error_message(blobid, hdcpupdatedate=hdcpupdatedate, state='Save JSON Resynthesis annotation', time=time_of_error, error_message=str(e))
-                    _update_resynth_run_details_to_failed(run_id, blobid, hdcpupdatedate)
+                    common.log_error_and_failure_for_resynth_note_job(run_id, blobid, hdcpupdatedate, message,
+                                                              "Save JSON Resynthesis Annotation")
                     continue
 
                 _update_resynth_run_details_to_complete(run_id, blobid, hdcpupdatedate)

@@ -64,8 +64,6 @@ def populate_blobid_in_job_table(**kwargs):
     (run_id, hdcpupdatedates) = kwargs['ti'].xcom_pull(task_ids='generate_job_id')
 
     # get record id to be processed
-    #TODO: presently we will only select the first note in the case of multiple notes with identical HDCPUpdateDates.
-    #TODO: Change this by removing TOP 1
     src_select_stmt = "SELECT DISTINCT hdcorcablobid FROM orca_ce_blob WHERE hdcpupdatedate = %s"
     #get completed jobs so that we do not repeat completed work
     screen_complete_stmt = "SELECT hdcorcablobid, hdcpupdatedate, annotation_date from af_runs_details  " \
@@ -76,7 +74,6 @@ def populate_blobid_in_job_table(**kwargs):
 
     tgt_insert_stmt = "INSERT INTO af_runs_details (af_runs_id, hdcpupdatedate, hdcorcablobid, annotation_status) " \
                       "VALUES (%s, %s, %s, %s)"
-
 
     for hdcpupdatedate in hdcpupdatedates:
         for row in common.SOURCE_NOTE_DB.get_records(src_select_stmt, parameters=(hdcpupdatedate,)):
@@ -95,10 +92,7 @@ def send_notes_to_brat(**kwargs):
     ssh_hook = SSHHook(ssh_conn_id="prod-brat")
 
     record_processed = 0
-    for notes_items in clinical_notes:
-        hdcorcablobid = list(notes_items.keys())[0]
-        notes = notes_items[hdcorcablobid]
-
+    for hdcorcablobid, notes in clinical_notes.items():
         # create a subfolder for hdcpupdatedate
         if record_processed == 0:
             remote_command = "[ -d {} ] && echo 'found'".format(remoteNlpDataPath)
@@ -124,7 +118,7 @@ def send_notes_to_brat(**kwargs):
                                                                                                        "").replace("'",
                                                                                                                    ""),
             remotePath=remoteNlpDataPath,
-            filename=hdcorcablobid[0]
+            filename=hdcorcablobid
         )
 
         subprocess.call(["ssh", "-o StrictHostKeyChecking=no", "-p {}".format(ssh_hook.port),
@@ -139,7 +133,7 @@ def send_notes_to_brat(**kwargs):
                 phiAnnoData.append(
                     "T{}\t{} {} {}\t{}".format(line, j['type'], j['start'], j['end'], j['text']))
 
-        full_file_name = "".join(map(str, [remoteNlpDataPath, "/", hdcorcablobid[0], ".ann"]))
+        full_file_name = "".join(map(str, [remoteNlpDataPath, "/", hdcorcablobid, ".ann"]))
         if len(phiAnnoData) > 0:
             remote_command = """
                      umask 002;
@@ -148,17 +142,18 @@ def send_notes_to_brat(**kwargs):
             """.format(
                 data=str(base64.b64encode("\r\n".join(phiAnnoData).encode('utf-8'))).replace("b'", "").replace("'", ""),
                 remotePath=remoteNlpDataPath,
-                filename=hdcorcablobid[0]
+                filename=hdcorcablobid
             )
         else:
             remote_command = "umask 002; touch {remotePath}/{filename}.ann;".format(remotePath=remoteNlpDataPath,
-                                                                                    filename=hdcorcablobid[0])
-
+                                                                                    filename=hdcorcablobid)
         subprocess.call(["ssh", "-p {}".format(ssh_hook.port), "{}@{}".format(ssh_hook.username, ssh_hook.remote_host),
                          remote_command])
 
-        update_brat_db_status(hdcorcablobid[0], notes['hdcpupdatedate'], full_file_name)
-        record_processed += 1
+        update_brat_db_status(hdcorcablobid, notes['hdcpupdatedate'], full_file_name)
+
+    print("{num} annotations sent to brat for review.".format(num=len(clinical_notes.keys())))
+
 
 def update_brat_db_status(note_id, hdcpupdatedate, directory_location):
     tgt_insert_stmt = """
@@ -171,52 +166,71 @@ def update_brat_db_status(note_id, hdcpupdatedate, directory_location):
                 parameters=(note_id, job_start_date, directory_location, job_start_date, BRAT_PENDING, hdcpupdatedate))
 
 
+def save_note_to_temp_storage(blobid, hdcpupdatedate, metadata_dict):
+    insert_stmt = "INSERT INTO temp_notes " \
+                  "(hdcorcablobid, hdcpupdatedate, clinical_event_id, person_id, " \
+                  "blob_contents, service_dt_time, institution, event_class_cd_descr) " \
+                  "VALUES (%s, %s, %s, %s, %s, %s, %s, %s)"
+    print("saving metadata to temp storage for {}, {}: {}".format(blobid, hdcpupdatedate, metadata_dict))
+    common.ANNOTATIONS_DB.run(insert_stmt, parameters=(blobid,
+                                                       hdcpupdatedate,
+                                                       metadata_dict["clinical_event_id"],
+                                                       metadata_dict["patient_id"],
+                                                       metadata_dict["blob_contents"],
+                                                       metadata_dict["servicedt"],
+                                                       metadata_dict["instit"],
+                                                       metadata_dict["cd_descr"]), autocommit=True)
+
+
 def annotate_clinical_notes(**kwargs):
     api_hook = HttpHook(http_conn_id='fh-nlp-api-deid', method='POST')
-
     # get last update date
     (run_id, hdcpupdatedates) = kwargs['ti'].xcom_pull(task_ids='generate_job_id')
     tgt_select_stmt = "SELECT hdcorcablobid FROM af_runs_details WHERE af_runs_id = %s and hdcpupdatedate = %s and annotation_status = %s"
-    src_select_stmt = "SELECT blob_contents FROM orca_ce_blob WHERE hdcpupdatedate = %s and hdcorcablobid = %s"
     tgt_update_stmt = "UPDATE af_runs_details SET annotation_status = %s, annotation_date = %s WHERE af_runs_id = %s and hdcpupdatedate = %s and hdcorcablobid in (%s)"
 
     for hdcpupdatedate in hdcpupdatedates:
+        batch_records = {}
+        for id_row in common.AIRFLOW_NLP_DB.get_records(tgt_select_stmt, parameters=(run_id, hdcpupdatedate, JOB_RUNNING)):
+            blobid = id_row[0]
+            note_metadata = common.get_note_and_metadata_dict_from_source(blobid, hdcpupdatedate)
+
+            if note_metadata["patient_id"] is None:
+                message = "Exception occurred: No PatientID found for blobid, hdcpupdatedate: {id},{date}".format(
+                    id=blobid, date=hdcpupdatedate)
+                common.log_error_and_failure_for_deid_note_job(run_id, blobid, hdcpupdatedate, message, "Flask DeID API")
+                continue
+
+            # record = { 'hdcorcablobid' : { 'original_note' : json, 'annotated_note' : json } }
+            record = {}
+            batch_records[blobid] = {}
+            record['original_note'] = {"extract_text": "{}".format(note_metadata["blob_contents"]),
+                                               "annotation_by_source": True}
+            record['hdcpupdatedate'] = hdcpupdatedate
+            try:
+                resp = api_hook.run("/deid/annotate", data=json.dumps(record['original_note']),
+                                    headers={"Content-Type": "application/json"})
+                print("API response: {}".format(resp.content))
+                record['annotated_note'] = json.loads(resp.content)
+                annotation_status = JOB_COMPLETE
+                batch_records[blobid] = record
+            except Exception as e:
+                common.log_error_and_failure_for_deid_note_job(run_id, blobid, hdcpupdatedate, e, "Flask DeID API")
+                continue
+
+            common.AIRFLOW_NLP_DB.run(tgt_update_stmt,
+                        parameters=(annotation_status,
+                                    datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3],
+                                    run_id,
+                                    hdcpupdatedate,
+                                    blobid))
+
+            save_note_to_temp_storage(blobid, hdcpupdatedate, note_metadata)
 
         datefolder = hdcpupdatedate.strftime('%Y-%m-%d')
-        record_processed = 0
-
-        for blobid in common.AIRFLOW_NLP_DB.get_records(tgt_select_stmt, parameters=(run_id, hdcpupdatedate, JOB_RUNNING)):
-            batch_records = []
-
-            for row in common.SOURCE_NOTE_DB.get_records(src_select_stmt, parameters=(hdcpupdatedate, blobid)):
-                # record = { 'hdcorcablobid' : { 'original_note' : json, 'annotated_note' : json } }
-                record = {}
-                record[blobid] = {}
-                record[blobid]['original_note'] = {"extract_text": "{}".format(row[0]),
-                                                   "annotation_by_source": True}
-                record[blobid]['hdcpupdatedate'] = hdcpupdatedate
-                try:
-                    resp = api_hook.run("/deid/annotate", data=json.dumps(record[blobid]['original_note']),
-                                        headers={"Content-Type": "application/json"})
-                    record[blobid]['annotated_note'] = json.loads(resp.content)
-                    annotation_status = JOB_COMPLETE
-
-                    batch_records.append(record)
-                except Exception as e:
-                    print("Exception occured: {}".format(e))
-                    time_of_error = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
-                    common.log_error_message(blobid=blobid, hdcpupdatedate=hdcpupdatedate, state="Flask DeID API", time=time_of_error,
-                                             error_message=e)
-                    annotation_status = JOB_FAILURE
-
-                common.AIRFLOW_NLP_DB.run(tgt_update_stmt,
-                            parameters=(annotation_status, datetime.now(), run_id, hdcpupdatedate, blobid[0]))
-
-                send_notes_to_brat(clinical_notes=batch_records, datefolder=datefolder)
-                for record in batch_records:
-                    common.save_deid_annotation(blobid, str(record[blobid]['annotated_note']))
-
-                record_processed += 1
+        send_notes_to_brat(clinical_notes=batch_records, datefolder=datefolder)
+        for blobid, record in batch_records.items():
+            common.save_deid_annotation(blobid, record['hdcpupdatedate'], str(record['annotated_note']))
 
     tgt_update_stmt = "UPDATE af_runs SET job_end = %s, job_status = %s WHERE af_runs_id = %s"
     common.AIRFLOW_NLP_DB.run(tgt_update_stmt, parameters=(datetime.now(), JOB_COMPLETE, run_id))

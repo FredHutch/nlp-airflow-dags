@@ -74,7 +74,7 @@ def _get_note_uid_by_directory_loc(directory_locations):
     else:
         sql_quote_escapes_locations = "'"+directory_locations+"'"
     tgt_select_stmt = """
-                SELECT hdcorcablobid, directory_location, brat_id, job_status 
+                SELECT directory_location, hdcorcablobid, hdcpupdatedate, brat_id, job_status  
                 FROM brat_review_status
                 WHERE directory_location in ({locations})
                 """.format(date=update_time, locations=sql_quote_escapes_locations)
@@ -83,7 +83,7 @@ def _get_note_uid_by_directory_loc(directory_locations):
     print("uid selection statement is: {}".format(tgt_select_stmt))
     for note in common.AIRFLOW_NLP_DB.get_records(tgt_select_stmt):
         print(note)
-        dir_locs_to_note_uids[note[1]] = note[0]
+        dir_locs_to_note_uids[note[0]] = (note[1], note[2])
 
     print("dir_locs_to_note_uids: {}".format(dir_locs_to_note_uids))
 
@@ -156,26 +156,29 @@ def save_and_mark_completed_note(**kwargs):
     for extraction_note in extraction_notes:
         reviewed_notation = _get_note_from_brat(extraction_note[REVIEW_NOTES_COL['DIR_LOCATION']])
         note_uids = _get_note_uid_by_directory_loc(extraction_note[REVIEW_NOTES_COL['DIR_LOCATION']])
+        hdcorcablobid = note_uids[extraction_note[REVIEW_NOTES_COL['DIR_LOCATION']]][0]
+        hdcpupdatedate = note_uids[extraction_note[REVIEW_NOTES_COL['DIR_LOCATION']]][1]
         try:
-            _translate_and_save_note(note_uids[extraction_note[REVIEW_NOTES_COL['DIR_LOCATION']]], reviewed_notation)
+            _translate_and_save_note(hdcorcablobid, hdcpupdatedate, reviewed_notation)
             _mark_review_completed(extraction_note[REVIEW_NOTES_COL['BRAT_ID']])
         except Exception as e:
             time_of_error = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
-            common.log_error_message(blobid=note_uids[extraction_note[REVIEW_NOTES_COL['DIR_LOCATION']]],
+            common.log_error_message(blobid=hdcorcablobid,
+                                     hdcpupdatedate=hdcpupdatedate,
                                      state="Extract Review Complete Note",
                                      time=time_of_error,
                                      error_message=e)
     return
 
 
-def _translate_and_save_note(note_uid, ann_annotation):
+def _translate_and_save_note(note_uid, hdcpupdatedate, ann_annotation):
     try:
         json_annotation = _translate_ann_to_json(ann_annotation)
     except Exception as e:
         print("Exception occurred: {}".format(e))
         raise e
 
-    common.save_json_annotation(note_uid, str(json_annotation), BRAT_REVIEWED_ANNOTATION_TYPE)
+    common.save_brat_reviewed_annotation(note_uid, hdcpupdatedate, str(json_annotation))
 
     return json_annotation
 
