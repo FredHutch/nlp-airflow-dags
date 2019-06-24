@@ -182,6 +182,18 @@ def save_note_to_temp_storage(blobid, hdcpupdatedate, metadata_dict):
                                                        metadata_dict["cd_descr"]), autocommit=True)
 
 
+def save_person_info_to_temp_storage(blobid, hdcpupdatedate, patient_data):
+    insert_stmt = "INSERT INTO temp_person " \
+                  "(hdcorcablobid, hdcpupdatedate, person_id, GivenName, MiddleName, FamilyName" \
+                  "VALUES (%s, %s, %s, %s, %s, %s)"
+    print("saving person info to temp storage for {}, {}: {}".format(blobid, hdcpupdatedate, patient_data[0]))
+    common.ANNOTATIONS_DB.run(insert_stmt, parameters=(blobid,
+                                                       hdcpupdatedate,
+                                                       patient_data[0],
+                                                       patient_data[1],
+                                                       patient_data[2],
+                                                       patient_data[3]), autocommit=True)
+
 def annotate_clinical_notes(**kwargs):
     api_hook = HttpHook(http_conn_id='fh-nlp-api-deid', method='POST')
     # get last update date
@@ -194,8 +206,9 @@ def annotate_clinical_notes(**kwargs):
         for id_row in common.AIRFLOW_NLP_DB.get_records(tgt_select_stmt, parameters=(run_id, hdcpupdatedate, JOB_RUNNING)):
             blobid = id_row[0]
             note_metadata = common.get_note_and_metadata_dict_from_source(blobid, hdcpupdatedate)
+            patient_data = common.get_patient_data_from_source(note_metadata["patient_id"])
 
-            if note_metadata["patient_id"] is None:
+            if note_metadata["patient_id"] is None or patient_data is None:
                 message = "Exception occurred: No PatientID found for blobid, hdcpupdatedate: {id},{date}".format(
                     id=blobid, date=hdcpupdatedate)
                 common.log_error_and_failure_for_deid_note_job(run_id, blobid, hdcpupdatedate, message, "Flask DeID API")
@@ -226,6 +239,7 @@ def annotate_clinical_notes(**kwargs):
                                     blobid))
 
             save_note_to_temp_storage(blobid, hdcpupdatedate, note_metadata)
+            save_person_info_to_temp_storage(blobid, hdcpupdatedate, patient_data)
 
         datefolder = hdcpupdatedate.strftime('%Y-%m-%d')
         send_notes_to_brat(clinical_notes=batch_records, datefolder=datefolder)

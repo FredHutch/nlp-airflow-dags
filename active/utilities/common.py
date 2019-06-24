@@ -173,6 +173,13 @@ def get_note_and_metadata_dict_from_source(blobId, hdcpupdatedate):
 
     return result_dict
 
+def get_patient_data_from_source(patientId):
+    pt_select_stmt = ("SELECT OrcaPersonID, GivenName, MiddleName, FamilyName"
+                      " FROM PersonCurrentIdentifiers JOIN Common_Person"
+                      " ON PersonCurrentIdentifiers.HDCPersonID = Common_Person.HdcPersonID"
+                      " WHERE PersonCurrentIdentifiers.OrcaPersonID = %s")
+    return (SOURCE_NOTE_DB.get_first(pt_select_stmt, parameters=(patientId,))
+            or (None, None, None, None))
 
 
 def _get_most_recent_successful_note_job_update_date(blobid):

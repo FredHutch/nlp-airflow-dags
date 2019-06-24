@@ -197,6 +197,12 @@ def cast_start_end_as_int(json_data, blobid, hdcpupdatedate):
 
     return corrected_dict
 
+def _get_patient_data_from_temp(blobid, hdcpupdatedate, patientId):
+    pt_select_stmt = ("SELECT hdcorcablobid, hdcpupdatedate, person_id, GivenName, MiddleName, FamilyName"
+                      " FROM temp_person"
+                      " WHERE hdcorcablobid = %s AND hdcpupdatedate = %s AND person_id = %s")
+    return (common.ANNOTATIONS_DB.get_first(pt_select_stmt, parameters=(patientId,blobid,hdcpupdatedate))
+            or (None, None, None, None, None, None))
 
 def _get_alias_data(patientId):
     al_select_stmt = ("SELECT FakeId, DateshiftDays, FirstName, MiddleName, LastName"
@@ -207,24 +213,16 @@ def _get_alias_data(patientId):
         or (None, None, None, None, None))
 
 
-def _get_patient_data(patientId):
-    pt_select_stmt = ("SELECT GivenName, MiddleName, FamilyName"
-                      " FROM PersonCurrentIdentifiers JOIN Common_Person"
-                      " ON PersonCurrentIdentifiers.HDCPersonID = Common_Person.HdcPersonID"
-                      " WHERE PersonCurrentIdentifiers.OrcaPersonID = %s")
-    return (common.SOURCE_NOTE_DB.get_first(pt_select_stmt, parameters=(patientId,))
-        or (None, None, None))
 
-
-def _build_patient_alias_map(patientId):
+def _build_patient_alias_map(blobid, hdcpupdatedate, patientId):
     alias_data = _get_alias_data(patientId)
     print("alias data for patient {}: {}".format(patientId, alias_data))
-    rl_names = _get_patient_data(patientId)
-    print("real names for patient {}: {}".format(patientId, rl_names))
+    rl_names = _get_patient_data_from_temp(blobid, hdcpupdatedate, patientId)
+    print("real names for patient {}: {}".format(patientId, rl_names[3:]))
     alias_map = {'pt_names': {}}
     if alias_data[1]:
         alias_map['date_shift'] = alias_data[1]
-    for idx, name in enumerate(rl_names):
+    for idx, name in enumerate(rl_names[3:]):
         if name and alias_data[2:][idx]:
             alias_map['pt_names'][name] = alias_data[2:][idx]
     return alias_map, alias_data[0]
@@ -246,7 +244,7 @@ def resynthesize_notes_marked_as_deid(**kwargs):
                                                           "Extract Blob/Patient Metadata")
                 continue
 
-            alias_map, fake_id = _build_patient_alias_map(note_metadata["patient_id"])
+            alias_map, fake_id = _build_patient_alias_map(blobid, hdcpupdatedate, note_metadata["patient_id"])
             batch_records = []
 
             for row in _get_annotations_by_id_and_created_date(blobid, creation_date):
