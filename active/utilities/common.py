@@ -86,6 +86,9 @@ def save_brat_reviewed_annotation(note_uid, hdcpupdatedate, json_annotation):
 def save_deid_annotation(note_uid, hdcpupdatedate, json_annotation):
     return save_json_annotation(note_uid, hdcpupdatedate, json_annotation, DEID_ANNOTATION_TYPE)
 
+def save_unreviewed_annotation(note_uid, hdcpupdatedate, json_annotation):
+    return save_json_annotation(note_uid, hdcpupdatedate, json_annotation, REVIEW_BYPASSED_ANNOTATION_TYPE)
+
 def save_resynthesis_annotation(note_uid, hdcpupdatedate, json_annotation):
     return save_json_annotation(note_uid, hdcpupdatedate, json_annotation, RESYNTH_ANNOTATION_TYPE)
 

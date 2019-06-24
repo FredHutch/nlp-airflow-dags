@@ -242,12 +242,43 @@ def annotate_clinical_notes(**kwargs):
             save_person_info_to_temp_storage(blobid, hdcpupdatedate, patient_data)
 
         datefolder = hdcpupdatedate.strftime('%Y-%m-%d')
-        send_notes_to_brat(clinical_notes=batch_records, datefolder=datefolder)
-        for blobid, record in batch_records.items():
-            common.save_deid_annotation(blobid, record['hdcpupdatedate'], str(record['annotated_note']))
+
+        to_review, skip_review = split_records_by_review_status(batch_records)
+        send_notes_to_brat(clinical_notes=to_review, datefolder=datefolder)
+        save_deid_annotations(to_review)
+        save_unreviewed_annotations(skip_review)
 
     tgt_update_stmt = "UPDATE af_runs SET job_end = %s, job_status = %s WHERE af_runs_id = %s"
     common.AIRFLOW_NLP_DB.run(tgt_update_stmt, parameters=(datetime.now(), JOB_COMPLETE, run_id))
+
+def save_deid_annotations(annotation_records):
+    for blobid, record in annotation_records.items():
+        common.save_deid_annotation(blobid, record['hdcpupdatedate'], str(record['annotated_note']))
+
+def save_unreviewed_annotations(annotation_records):
+    for blobid, record in annotation_records.items():
+        common.save_unreviewed_annotation(blobid, record['hdcpupdatedate'], str(record['annotated_note']))
+
+
+def split_records_by_review_status(records):
+    records_to_review = []
+    records_without_review = []
+    if not hasattr(records, '__iter__'):
+        records = [records]
+    for record in records:
+        if _review_criterion(record):
+            records_to_review.append(record)
+        else:
+            records_without_review.append(record)
+    return records_to_review, records_without_review
+
+def _review_criterion(record):
+    #TODO: this is where annotation-specific logic should go for determining true (needs review)
+    #TODO: or False (no review required)
+    if True:
+        return True
+
+    return False
 
 
 generate_job_id = \
