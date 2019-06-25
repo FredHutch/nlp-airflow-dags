@@ -1,8 +1,6 @@
 from datetime import datetime, timedelta
 import json
 import subprocess
-import base64
-import re
 
 from airflow.contrib.hooks.ssh_hook import SSHHook
 from airflow.operators import PythonOperator
@@ -10,9 +8,7 @@ from airflow.models import DAG
 import utilities.common as common
 from utilities.common import BRAT_PENDING, BRAT_READY_TO_EXTRACT, BRAT_REVIEWED_ANNOTATION_TYPE, BRAT_COMPLETE
 
-
-
-REVIEW_NOTES_COL = {'BRAT_ID':0, 'DIR_LOCATION':1, 'JOB_STATUS':2, 'HDCPUPDATEDATE':3}
+REVIEW_NOTES_COL = {'BRAT_ID': 0, 'DIR_LOCATION': 1, 'JOB_STATUS': 2, 'HDCPUPDATEDATE': 3}
 
 args = {
     'owner': 'whiteau',
@@ -28,12 +24,13 @@ dag = DAG(dag_id='prod-cortex-pull-reviewed-notes-from-brat',
 
 
 def scan_and_update_notes_for_completion(**kwargs):
-    remoteNlpHomePath = "/mnt/encrypted/brat-v1.3_Crunchy_Frog/data/nlp"
+    remote_nlp_home_path = "/mnt/encrypted/brat-v1.3_Crunchy_Frog/data/nlp"
 
     ssh_hook = SSHHook(ssh_conn_id="prod-brat")
 
-    #specifying it as a literal regex gets airflows ssh cmd recognize the wildcards in the filepath.
-    remote_command = r'egrep -l "^T[0-9]+[[:space:]]+.*REVIEW_COMPLETE" {location}/*/*.ann'.format(location=remoteNlpHomePath)
+    # specifying it as a literal regex gets airflows ssh cmd recognize the wildcards in the filepath.
+    remote_command = r'egrep -l "^T[0-9]+[[:space:]]+.*REVIEW_COMPLETE" {location}/*/*.ann'.format(
+        location=remote_nlp_home_path)
 
     complete_list = subprocess.getoutput(
         "ssh {}@{} {}".format(ssh_hook.username, ssh_hook.remote_host, remote_command))
@@ -88,6 +85,7 @@ def _get_notes(status, ids_only=False):
     print("{} notes to be checked for completion".format(len(hdcpupdatedates)))
     return (hdcpupdatedates)
 
+
 def _get_note_by_brat_id(brat_id):
     # get all job records that are ready to check for review completion
     src_select_stmt = """
@@ -96,7 +94,7 @@ def _get_note_by_brat_id(brat_id):
                           WHERE brat_id = {brat_id}
                           """.format(brat_id=brat_id)
 
-    #make the assumption that this will always return a unique record
+    # make the assumption that this will always return a unique record
     return common.AIRFLOW_NLP_DB.get_records(src_select_stmt)[0]
 
 
@@ -114,15 +112,15 @@ def _scan_note_for_completion(review_note):
     return is_complete != 'found'
 
 
-def _update_note_status(brat_id, job_status):
+def _update_note_status(brat_id, hdcpupdatedate, job_status):
     update_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
     tgt_update_stmt = """
             UPDATE brat_review_status 
             SET job_status = %s, last_update_date = %s 
-            WHERE brat_id in (%s)
+            WHERE brat_id in (%s) AND hdcpupdatedate = %s
             """
 
-    common.AIRFLOW_NLP_DB.run(tgt_update_stmt, parameters=(job_status, update_time, brat_id))
+    common.AIRFLOW_NLP_DB.run(tgt_update_stmt, parameters=(job_status, update_time, brat_id, hdcpupdatedate))
 
     return
 
@@ -133,8 +131,11 @@ def save_and_mark_completed_note(**kwargs):
     for extraction_note in extraction_notes:
         reviewed_notation = _get_note_from_brat(extraction_note[REVIEW_NOTES_COL['DIR_LOCATION']])
         try:
-            _translate_and_save_note(extraction_note[REVIEW_NOTES_COL['BRAT_ID']], reviewed_notation)
-            _mark_review_completed(extraction_note[REVIEW_NOTES_COL['BRAT_ID']])
+            _translate_and_save_note(extraction_note[REVIEW_NOTES_COL['BRAT_ID']],
+                                     extraction_note[REVIEW_NOTES_COL['HDCPUPDATEDATE']],
+                                     reviewed_notation)
+            _mark_review_completed(extraction_note[REVIEW_NOTES_COL['BRAT_ID']],
+                                   extraction_note[REVIEW_NOTES_COL['HDCPUPDATEDATE']])
         except Exception as e:
             time_of_error = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
             common.log_error_message(blobid=extraction_note[REVIEW_NOTES_COL['BRAT_ID']],
@@ -181,8 +182,8 @@ def _get_note_from_brat(note_location):
     return reviewed_annotation_output
 
 
-def _mark_review_completed(brat_id):
-    return _update_note_status(brat_id, BRAT_COMPLETE)
+def _mark_review_completed(brat_id, hdcpupdatedate):
+    return _update_note_status(brat_id, hdcpupdatedate, BRAT_COMPLETE)
 
 
 scan_and_update_notes_for_completion = \
@@ -192,11 +193,11 @@ scan_and_update_notes_for_completion = \
                    dag=dag)
 
 
-
 save_and_mark_completed_note = \
     PythonOperator(task_id='save_and_mark_completed_note',
                    provide_context=True,
                    python_callable=save_and_mark_completed_note,
                    dag=dag)
+
 
 scan_and_update_notes_for_completion >> save_and_mark_completed_note
