@@ -24,8 +24,8 @@ dag = DAG(dag_id='prod-cortex-resynthesis-deid-notes',
 
 def _insert_resynth_run_job(run_id, update_date, record_count, job_start_date):
     tgt_insert_stmt = "INSERT INTO af_resynthesis_runs " \
-                      "(af_resynth_runs_id, source_last_update_date, record_counts, job_start, job_status)" \
-                      " VALUES (%s, %s, %s, %s, %s)"
+                      "(af_resynth_runs_id, source_last_update_date, record_counts, job_start, job_status) " \
+                      "VALUES (%s, %s, %s, %s, %s)"
     common.AIRFLOW_NLP_DB.run(tgt_insert_stmt,
                               parameters=(run_id, update_date, record_count, job_start_date, JOB_RUNNING))
 
@@ -39,7 +39,7 @@ def _get_annotations_since_date(update_date_from_last_run):
                       "FROM annotations " \
                       "WHERE date_created >= %s " \
                       "AND (category = %s " \
-                      "     OR category = %s)" \
+                      "     OR category = %s) " \
                       "GROUP BY date_created "
 
     return common.ANNOTATIONS_DB.get_records(src_select_stmt,
@@ -140,9 +140,9 @@ def _update_resynth_run_details_to_failed(run_id, blobid, date):
 
 
 def _update_resynth_run_details_by_id_and_date(run_id, blobid, date, state):
-    tgt_update_stmt = "UPDATE af_resynthesis_runs_details" \
-                      " SET resynth_status = %s, resynth_date = %s" \
-                      " WHERE af_resynth_runs_id = %s and hdcpupdatedate = %s and hdcorcablobid in (%s)"
+    tgt_update_stmt = "UPDATE af_resynthesis_runs_details " \
+                      "SET resynth_status = %s, resynth_date = %s " \
+                      "WHERE af_resynth_runs_id = %s and hdcpupdatedate = %s and hdcorcablobid in (%s)"
 
     common.AIRFLOW_NLP_DB.run(tgt_update_stmt,
                               parameters=(

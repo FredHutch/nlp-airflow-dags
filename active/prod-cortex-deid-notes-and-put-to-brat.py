@@ -47,8 +47,8 @@ def generate_job_id(**kwargs):
                       "WHERE HDCPUpdateDate >= %s " \
                       "GROUP BY HDCPUpdateDate"
     tgt_insert_stmt = "INSERT INTO af_runs " \
-                      "(af_runs_id, source_last_update_date, record_counts, job_start, job_status)" \
-                      " VALUES (%s, %s, %s, %s, %s)"
+                      "(af_runs_id, source_last_update_date, record_counts, job_start, job_status) " \
+                      "VALUES (%s, %s, %s, %s, %s)"
 
     job_start_date = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
     hdcpupdatedates = []
@@ -68,7 +68,7 @@ def populate_blobid_in_job_table(**kwargs):
     (run_id, hdcpupdatedates) = kwargs['ti'].xcom_pull(task_ids='generate_job_id')
 
     # get record id to be processed
-    src_select_stmt = "SELECT DISTINCT hdcorcablobid FROM orca_ce_blob WHERE hdcpupdatedate = %s"
+    src_select_stmt = "SELECT DISTINCT TOP 3 hdcorcablobid FROM orca_ce_blob WHERE hdcpupdatedate = %s"
     # get completed jobs so that we do not repeat completed work
     screen_complete_stmt = "SELECT hdcorcablobid, hdcpupdatedate, annotation_date from af_runs_details  " \
                            "WHERE annotation_status = %s"
@@ -191,7 +191,7 @@ def save_note_to_temp_storage(blobid, hdcpupdatedate, metadata_dict):
 
 def save_person_info_to_temp_storage(blobid, hdcpupdatedate, patient_data):
     insert_stmt = "INSERT INTO temp_person " \
-                  "(hdcorcablobid, hdcpupdatedate, person_id, GivenName, MiddleName, FamilyName" \
+                  "(hdcorcablobid, hdcpupdatedate, person_id, GivenName, MiddleName, FamilyName) " \
                   "VALUES (%s, %s, %s, %s, %s, %s)"
     print("saving person info to temp storage for {}, {}: {}".format(blobid, hdcpupdatedate, patient_data[0]))
     common.ANNOTATIONS_DB.run(insert_stmt, parameters=(blobid,
@@ -233,7 +233,7 @@ def annotate_clinical_notes(**kwargs):
 
             # record = { 'hdcorcablobid' : { 'original_note' : json, 'annotated_note' : json } }
             record = dict()
-            batch_records[blobid] = {}
+            batch_records[blobid] = dict()
             record['original_note'] = {"extract_text": "{}".format(note_metadata["blob_contents"]),
                                        "annotation_by_source": True}
             record['hdcpupdatedate'] = hdcpupdatedate
@@ -280,15 +280,14 @@ def save_unreviewed_annotations(annotation_records):
 
 
 def split_records_by_review_status(records):
-    records_to_review = []
-    records_without_review = []
-    if not hasattr(records, '__iter__'):
-        records = [records]
-    for record in records:
+    records_to_review = dict()
+    records_without_review = dict()
+
+    for blobid, record in records.items():
         if _review_criterion(record):
-            records_to_review.append(record)
+            records_to_review[blobid] = record
         else:
-            records_without_review.append(record)
+            records_without_review[blobid] = record
     return records_to_review, records_without_review
 
 

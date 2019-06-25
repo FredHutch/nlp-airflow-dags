@@ -8,7 +8,7 @@ from airflow.models import DAG
 import utilities.common as common
 from utilities.common import BRAT_PENDING, BRAT_READY_TO_EXTRACT, BRAT_REVIEWED_ANNOTATION_TYPE, BRAT_COMPLETE
 
-REVIEW_NOTES_COL = {'BRAT_ID': 0, 'DIR_LOCATION': 1, 'JOB_STATUS': 2, 'HDCPUPDATEDATE': 3}
+REVIEW_NOTES_COL = {'BRAT_ID': 0, 'DIR_LOCATION': 1, 'JOB_STATUS': 2, 'HDCPUPDATEDATE': 3, 'HDCORCABLOBID': 4}
 
 args = {
     'owner': 'whiteau',
@@ -67,7 +67,7 @@ def _update_job_status_by_directory_loc(directory_locations):
 def _get_notes(status, ids_only=False):
     # get all job records that are ready to check for review completion
     src_select_stmt = """
-                      SELECT brat_id, directory_location, job_status, hdcpupdatedate 
+                      SELECT brat_id, directory_location, job_status, hdcpupdatedate, hdcorcablobid 
                       FROM brat_review_status 
                       WHERE job_status like '{status}'
                       """.format(status=status)
@@ -131,18 +131,19 @@ def save_and_mark_completed_note(**kwargs):
     for extraction_note in extraction_notes:
         reviewed_notation = _get_note_from_brat(extraction_note[REVIEW_NOTES_COL['DIR_LOCATION']])
         try:
-            _translate_and_save_note(extraction_note[REVIEW_NOTES_COL['BRAT_ID']],
+            _translate_and_save_note(extraction_note[REVIEW_NOTES_COL['HDCORCABLOBID']],
                                      extraction_note[REVIEW_NOTES_COL['HDCPUPDATEDATE']],
                                      reviewed_notation)
             _mark_review_completed(extraction_note[REVIEW_NOTES_COL['BRAT_ID']],
                                    extraction_note[REVIEW_NOTES_COL['HDCPUPDATEDATE']])
         except Exception as e:
             time_of_error = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
-            common.log_error_message(blobid=extraction_note[REVIEW_NOTES_COL['BRAT_ID']],
+            common.log_error_message(blobid=extraction_note[REVIEW_NOTES_COL['HDCORCABLOBID']],
                                      hdcpupdatedate=extraction_note[REVIEW_NOTES_COL['HDCPUPDATEDATE']],
                                      state="Extract Review Complete Note",
                                      time=time_of_error,
-                                     error_message=e)
+                                     error_message="Exception ocurred for brat_id: {}: {}".format(
+                                         REVIEW_NOTES_COL['BRAT_ID'], e))
     return
 
 
