@@ -93,23 +93,30 @@ def save_resynthesis_annotation(note_uid, hdcpupdatedate, json_annotation):
     return save_json_annotation(note_uid, hdcpupdatedate, json_annotation, RESYNTH_ANNOTATION_TYPE)
 
 def save_json_annotation(hdcorcablobid, hdcpupdatedate, json_annotation, annotation_type):
-    tgt_insert_stmt = "INSERT INTO annotations (hdcorcablobid, hdcpupdatedate, category, date_created, date_modified, annotation) VALUES (%s, %s, %s, %s, %s, %s)"
+    tgt_insert_stmt = "INSERT INTO annotations " \
+                      "(hdcorcablobid, hdcpupdatedate, category, date_created, date_modified, annotation) " \
+                      "VALUES (%s, %s, %s, %s, %s, %s)"
     job_start_date = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
-    print("{},{}: {}, {}".format(hdcorcablobid, hdcpupdatedate, annotation_type, job_start_date))
+    print("new annotation added: BlobId {}, hdcpupdatedate {}: annotation_type {}, job_start_date {}".format(
+        hdcorcablobid, hdcpupdatedate, annotation_type, job_start_date))
 
     ANNOTATIONS_DB.run(tgt_insert_stmt,
-                       parameters=(hdcorcablobid, hdcpupdatedate, annotation_type, job_start_date, job_start_date, json_annotation),
+                       parameters=(
+                       hdcorcablobid, hdcpupdatedate, annotation_type, job_start_date, job_start_date, json_annotation),
                        autocommit=True)
     return
 
 
 def log_error_and_failure_for_deid_note_job(run_id, blobid, hdcpupdatedate, message, state):
-    tgt_update_stmt = "UPDATE af_runs_details SET annotation_status = %s, annotation_date = %s WHERE af_runs_id = %s and hdcpupdatedate = %s and hdcorcablobid in (%s)"
+    tgt_update_stmt = "UPDATE af_runs_details " \
+                      "SET annotation_status = %s, annotation_date = %s " \
+                      "WHERE af_runs_id = %s and hdcpupdatedate = %s and hdcorcablobid in (%s)"
     _log_failure(run_id, blobid, hdcpupdatedate, message, state, tgt_update_stmt)
 
 
 def log_error_and_failure_for_resynth_note_job(run_id, blobid, hdcpupdatedate, message, state):
-    tgt_update_stmt = "UPDATE af_resynthesis_runs_details SET resynth_status = %s, resynth_date = %s WHERE af_resynth_runs_id = %s and hdcpupdatedate = %s and hdcorcablobid in (%s)"
+    tgt_update_stmt = "UPDATE af_resynthesis_runs_details SET resynth_status = %s, resynth_date = %s " \
+                      "WHERE af_resynth_runs_id = %s and hdcpupdatedate = %s and hdcorcablobid in (%s)"
     _log_failure(run_id, blobid, hdcpupdatedate, message, state, tgt_update_stmt)
 
 
@@ -122,14 +129,18 @@ def _log_failure(run_id, blobid, hdcpupdatedate, message, state, update_stmt):
                        parameters=(
                            JOB_FAILURE, time_of_error, run_id, hdcpupdatedate, blobid), autocommit=True)
 
+
 def get_original_note_by_blobid(blobid):
     src_select_stmt = "SELECT blob_contents FROM orca_ce_blob WHERE  hdcorcablobid = %s"
-    results = SOURCE_NOTE_DB.get_first(src_select_stmt, parameters=(blobid))
+    results = SOURCE_NOTE_DB.get_first(src_select_stmt, parameters=(blobid,))
 
     #return blob_contents [0] from returned row
     return results[0]
 
+
 def get_note_from_temp(blobid, hdcpupdatedate):
+    print("Getting Note Metadata from Temp Note DB for BlobId: {id} and HDCPUpdateDate: {date}".format(id=blobid,
+                                                                                                    date=hdcpupdatedate))
     src_select_stmt = "SELECT clinical_event_id, hdcorcablobid, hdcpupdatedate, person_id, " \
                               "blob_contents, service_dt_time, institution, event_class_cd_descr " \
                       "FROM temp_notes " \
@@ -150,6 +161,7 @@ def get_note_from_temp(blobid, hdcpupdatedate):
 
 
 def get_note_metadata_from_source(blobId):
+    print("Getting Note Metadata  from Source DB for BlobId: {id}".format(id=blobId))
     note_select_stmt = ("SELECT ORCA_CE_Blob.CLINICAL_EVENT_ID, SERVICE_DT_TM, INSTITUTION, EVENT_CLASS_CD_DESCR, PERSON_ID"
                         " FROM ORCA_CE_Blob JOIN ORCA_Clinical_Event"
                         " ON ORCA_CE_Blob.CLINICAL_EVENT_ID = ORCA_Clinical_Event.CLINICAL_EVENT_ID"
@@ -159,7 +171,14 @@ def get_note_metadata_from_source(blobId):
 
 
 def get_note_and_metadata_dict_from_source(blobId, hdcpupdatedate):
-    note_select_stmt = ("SELECT ORCA_CE_Blob.CLINICAL_EVENT_ID, ORCA_CE_BLOB.BLOB_CONTENTS, SERVICE_DT_TM, INSTITUTION, EVENT_CLASS_CD_DESCR, PERSON_ID"
+    print("Getting Note Metadata from Source DB for BlobId: {id} and HDCPUpdateDate: {date}".format(id=blobId,
+                                                                                                    date=hdcpupdatedate))
+    note_select_stmt = ("SELECT ORCA_CE_Blob.CLINICAL_EVENT_ID,"
+                        " ORCA_CE_BLOB.BLOB_CONTENTS,"
+                        " SERVICE_DT_TM,"
+                        " INSTITUTION,"
+                        " EVENT_CLASS_CD_DESCR,"
+                        " PERSON_ID"
                         " FROM ORCA_CE_Blob JOIN ORCA_Clinical_Event"
                         " ON ORCA_CE_Blob.CLINICAL_EVENT_ID = ORCA_Clinical_Event.CLINICAL_EVENT_ID"
                         " WHERE ORCA_CE_Blob.HDCOrcaBlobID = %s AND ORCA_CE_Blob.HDCPUpdateDate = %s")
@@ -167,16 +186,17 @@ def get_note_and_metadata_dict_from_source(blobId, hdcpupdatedate):
     result = (SOURCE_NOTE_DB.get_first(note_select_stmt, parameters=(blobId, hdcpupdatedate))
         or (None, None, None, None, None, None))
 
-    result_dict = {"clinical_event_id":result[0],
-                   "blob_contents":result[1],
-                   "servicedt":result[2],
-                   "instit":result[3],
-                   "cd_descr":result[4],
-                   "patient_id":result[5]}
+    result_dict = {"clinical_event_id": result[0],
+                   "blob_contents": result[1],
+                   "servicedt": result[2],
+                   "instit": result[3],
+                   "cd_descr": result[4],
+                   "patient_id": result[5]}
 
     return result_dict
 
 def get_patient_data_from_source(patientId):
+    print("Querying Source DB for patient date for PatientId: {id}".format(id=patientId))
     pt_select_stmt = ("SELECT OrcaPersonID, GivenName, MiddleName, FamilyName"
                       " FROM PersonCurrentIdentifiers JOIN Common_Person"
                       " ON PersonCurrentIdentifiers.HDCPersonID = Common_Person.HdcPersonID"
@@ -186,7 +206,9 @@ def get_patient_data_from_source(patientId):
 
 
 def _get_most_recent_successful_note_job_update_date(blobid):
-    select_stmt = "SELECT MAX(hdcpupdatedate) FROM af_resynthesis_runs_details where hdcorcablobid = %s and resynth_status = %s"
+    select_stmt = "SELECT MAX(hdcpupdatedate)" \
+                  " FROM af_resynthesis_runs_details" \
+                  " WHERE hdcorcablobid = %s AND resynth_status = %s"
 
     return AIRFLOW_NLP_DB.get_first(select_stmt, parameters=(blobid, JOB_COMPLETE))[0]
 
@@ -194,11 +216,14 @@ def _get_most_recent_successful_note_job_update_date(blobid):
 def write_to_s3(blobid, update_date, string_payload, key):
     """
     create S3 hook, upload json object to the bucket
+    :param blobid: the hdcorcablobid for the note object
+    :param update_date: the UpdateDate associated with the note object (normally hdcpupdatedate)
     :param string_payload: file to be dropped off
     :param key: file name shown on S3
     """
     s3_job_date = _get_most_recent_successful_note_job_update_date(blobid)
-    print("blobId: {}, incoming update Date: {}, saved update date: {}".format(blobid, update_date, s3_job_date))
+    print("Verifying S3 status for blobId: {}, incoming update Date: {}, saved update date: {}".format(
+          blobid, update_date, s3_job_date))
     if s3_job_date is None or s3_job_date <= update_date:
         S3.load_string(string_payload,
                        key,
@@ -210,4 +235,3 @@ def write_to_s3(blobid, update_date, string_payload, key):
                                        blobid,
                                        update_date,
                                        s3_job_date)
-

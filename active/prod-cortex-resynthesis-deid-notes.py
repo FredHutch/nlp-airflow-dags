@@ -216,14 +216,24 @@ def cast_start_end_as_int(json_data, blobid, hdcpupdatedate):
 
 
 def _get_patient_data_from_temp(blobid, hdcpupdatedate, patientid):
+    print(
+        "Fetching Real Patient Name Data from Temp DB for blobID: {blobid}, hdcpupdatedate: {date}, patientId: {patientid}".format(
+            blobid=blobid, date=hdcpupdatedate, patientid=patientid))
     pt_select_stmt = ("SELECT hdcorcablobid, hdcpupdatedate, person_id, GivenName, MiddleName, FamilyName"
                       " FROM temp_person"
                       " WHERE hdcorcablobid = %s AND hdcpupdatedate = %s AND person_id = %s")
-    return (common.ANNOTATIONS_DB.get_first(pt_select_stmt, parameters=(blobid, hdcpupdatedate, patientid))
+    ret = (common.ANNOTATIONS_DB.get_first(pt_select_stmt, parameters=(blobid, hdcpupdatedate, patientid))
             or (None, None, None, None, None, None))
+    if ret[0] is None:
+        print(
+            "No Real Patient Name Data found in Temp DB for blobID: "
+            "{blobid}, hdcpupdatedate: {date}, patientId: {patientid}".format(
+                blobid=blobid, date=hdcpupdatedate, patientid=patientid))
+    return ret
 
 
 def _get_alias_data(patientid):
+    print("Fetching Alias Name Data from Source DB for patientId: {}".format(patientid))
     al_select_stmt = ("SELECT FakeId, DateshiftDays, FirstName, MiddleName, LastName"
                       " FROM PatientMap JOIN PersonCurrentIdentifiers"
                       " ON PersonCurrentIdentifiers.HDCPersonID = PatientMap.HdcPersonID"
@@ -236,7 +246,6 @@ def _build_patient_alias_map(blobid, hdcpupdatedate, patientid):
     alias_data = _get_alias_data(patientid)
     print("alias data for patient {}: {}".format(patientid, alias_data))
     rl_names = _get_patient_data_from_temp(blobid, hdcpupdatedate, patientid)
-    print("real names for patient {}: {}".format(patientid, rl_names[3:]))
     alias_map = {'pt_names': {}}
     if alias_data[1]:
         alias_map['date_shift'] = alias_data[1]
