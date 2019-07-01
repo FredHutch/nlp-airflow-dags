@@ -115,10 +115,12 @@ def populate_blobid_in_job_table(**kwargs):
 
     for creation_date in datecreated:
         for row in common.ANNOTATIONS_DB.get_records(src_select_stmt, parameters=(creation_date,)):
-            if (row[0], row[1]) in complete_jobs.keys():
+            if (row[0], row[1]) in complete_jobs:
                 print("Job for note {},{}  originally created on {} has already been completed on {} ."
                       " Skipping.".format(row[0], row[1], creation_date, complete_jobs[(row[0], row[1])]))
                 continue
+
+            print("Inserting new note job for blobid {}:{}".format(row[0], row[1]))
             common.AIRFLOW_NLP_DB.run(tgt_insert_stmt, parameters=(run_id, row[1], row[0], creation_date, JOB_RUNNING))
 
 
@@ -217,7 +219,7 @@ def _get_patient_data_from_temp(blobid, hdcpupdatedate, patientid):
     pt_select_stmt = ("SELECT hdcorcablobid, hdcpupdatedate, person_id, GivenName, MiddleName, FamilyName"
                       " FROM temp_person"
                       " WHERE hdcorcablobid = %s AND hdcpupdatedate = %s AND person_id = %s")
-    return (common.ANNOTATIONS_DB.get_first(pt_select_stmt, parameters=(patientid, blobid, hdcpupdatedate))
+    return (common.ANNOTATIONS_DB.get_first(pt_select_stmt, parameters=(blobid, hdcpupdatedate, patientid))
             or (None, None, None, None, None, None))
 
 
@@ -247,15 +249,17 @@ def _build_patient_alias_map(blobid, hdcpupdatedate, patientid):
 def resynthesize_notes_marked_as_deid(**kwargs):
     # get last update date
     (run_id, createddate) = kwargs['ti'].xcom_pull(task_ids='generate_job_id')
-
     for creation_date in createddate:
+        record_processed = 0
+        hdcpupdatedate = creation_date
         for id_record in _get_resynth_run_details_id_by_creation_date(run_id, creation_date):
             record_processed = 0
+            service_dts = {}
             blobid = id_record[0]
             hdcpupdatedate = id_record[1]
             note_metadata = common.get_note_from_temp(blobid, hdcpupdatedate)
             if not note_metadata["patient_id"]:
-                message = "No PatientID found for BlobID {}".format(blobid)
+                message = "No PatientID found for BlobID {id}. Failing note and Continuing.".format(id=blobid)
                 common.log_error_and_failure_for_resynth_note_job(run_id, blobid, hdcpupdatedate, message,
                                                                   "Extract Blob/Patient Metadata")
                 continue
@@ -272,7 +276,7 @@ def resynthesize_notes_marked_as_deid(**kwargs):
                                                 alias_map)
 
                 if results is None:
-                    print("No resynthesis results returned for id: {id}".format(id=blobid))
+                    print("No resynthesis results returned for id: {id}. Failing note and Continuing".format(id=blobid))
                     _update_resynth_run_details_to_failed(run_id, blobid, hdcpupdatedate)
                     continue
 
