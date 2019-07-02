@@ -301,7 +301,8 @@ def resynthesize_notes_marked_as_deid(**kwargs):
                                              'patient_pubid': fake_id,
                                              'service_date': service_dts[blobid].strftime("%Y-%m-%d %H:%M:%S.%f")[: -3],
                                              'institution': note_metadata["instit"],
-                                             'note_type': note_metadata["cd_descr"]})
+                                             'note_type': note_metadata["cd_descr"]},
+                                            indent=4, sort_keys=True)
                     # save annotated notes to s3
                     common.write_to_s3(blobid,
                                        hdcpupdatedate,
