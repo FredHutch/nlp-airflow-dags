@@ -1,3 +1,4 @@
+import configparser
 from datetime import datetime
 from airflow.hooks.mssql_hook import MsSqlHook
 from airflow.hooks.postgres_hook import PostgresHook
@@ -6,6 +7,8 @@ from airflow.models import Variable
 from contextlib import closing
 
 
+config = configparser.ConfigParser()
+config.read('../config.cfg')
 __error_db_stage_dict = {"PROD": PostgresHook(postgres_conn_id="prod-airflow-nlp-pipeline"),
                          "DEV": PostgresHook(postgres_conn_id="dev-airflow-nlp-pipeline")
                          }
@@ -25,6 +28,10 @@ __s3_bucket_stage_dict = {"PROD": "fh-nlp-deid",
                           "DEV": "fh-nlp-deid"
                           }
 
+__s3_key_stage_dict = {"PROD": 'deid_test',
+                       "DEV": 'deid_test'
+                       }
+MAX_BATCH_SIZE = config['MAX_NOTES_PER_BATCH']
 STAGE = Variable.get("NLP_ENVIRON")
 ERROR_DB = __error_db_stage_dict[STAGE]
 SOURCE_NOTE_DB = __source_note_db_stage_dict[STAGE]
@@ -32,6 +39,7 @@ AIRFLOW_NLP_DB = __airflow_nlp_db_stage_dict[STAGE]
 ANNOTATIONS_DB = __annotations_db_stage_dict[STAGE]
 S3 = __s3_hook_stage_dict[STAGE]
 S3_BUCKET_NAME = __s3_bucket_stage_dict[STAGE]
+S3_KEY_NAME = __s3_key_stage_dict[STAGE]
 
 JOB_RUNNING = 'scheduled'
 JOB_COMPLETE = 'completed'
@@ -229,6 +237,8 @@ def write_to_s3(blobid, update_date, string_payload, key):
                        key,
                        bucket_name=S3_BUCKET_NAME,
                        replace=True)
+        print("Successfully updated S3 payload for key {} for blobId: {}, incoming update Date: {}".format(
+            key, blobid, update_date))
         return
 
     raise OutOfDateAnnotationException("OutOfDateAnnotationException: A newer version of the annotation exists in S3",

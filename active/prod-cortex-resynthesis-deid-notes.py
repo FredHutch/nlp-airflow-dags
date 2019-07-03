@@ -132,7 +132,7 @@ def _get_resynth_run_details_id_by_creation_date(run_id, date):
 
 
 def _update_resynth_run_details_to_complete(run_id, blobid, date):
-    print("updating blob {} to complete".format(blobid))
+    print("updating blob {}, {} to complete".format(blobid, date))
     return _update_resynth_run_details_by_id_and_date(run_id, blobid, date, JOB_COMPLETE)
 
 
@@ -306,7 +306,8 @@ def resynthesize_notes_marked_as_deid(**kwargs):
                     common.write_to_s3(blobid,
                                        hdcpupdatedate,
                                        string_payload=file_to_s3,
-                                       key='deid_test/annotated_note/{id}.json'.format(id=blobid))
+                                       key='{key_stage}/annotated_note/{id}.json'.format(key_stage=common.S3_KEY_NAME,
+                                                                                         id=blobid))
 
                 except common.OutOfDateAnnotationException as e:
                     print("OutOfDateAnnotationException occurred: {}".format(e))

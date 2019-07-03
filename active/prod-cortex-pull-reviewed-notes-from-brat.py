@@ -121,6 +121,7 @@ def _update_note_status(brat_id, hdcpupdatedate, job_status):
             """
 
     common.AIRFLOW_NLP_DB.run(tgt_update_stmt, parameters=(job_status, update_time, brat_id, hdcpupdatedate))
+    print("Note: {}, {} has been updated to job status: {}".format(brat_id, hdcpupdatedate, job_status))
 
     return
 
@@ -148,6 +149,7 @@ def save_and_mark_completed_note(**kwargs):
 
 
 def _translate_and_save_note(note_uid, hdcpupdatedate, ann_annotation):
+    print("translating review-complete note {}, {} to json for extraction".format(note_uid, hdcpupdatedate))
     try:
         json_annotation = _translate_ann_to_json(ann_annotation)
     except Exception as e:
