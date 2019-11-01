@@ -6,7 +6,8 @@ from airflow.operators.python_operator import PythonOperator
 from airflow.models import DAG
 
 import utilities.common as common
-from utilities.common import JOB_RUNNING, JOB_COMPLETE, JOB_FAILURE, REVIEW_BYPASSED_ANNOTATION_TYPE, BRAT_REVIEWED_ANNOTATION_TYPE
+from utilities.common import JOB_RUNNING, JOB_COMPLETE, JOB_FAILURE, 
+                            REVIEW_BYPASSED_ANNOTATION_TYPE, BRAT_REVIEWED_ANNOTATION_TYPE
 
 
 args = {
@@ -297,22 +298,22 @@ def resynthesize_notes_marked_as_deid(**kwargs):
                 try:
                     # save json to db
                     common.save_resynthesis_annotation(blobid, hdcpupdatedate, str(record[blobid]))
-                    file_to_s3 = json.dumps({'resynthesized_notes': record[blobid]['text'],
+                    json_obj_to_store = json.dumps({'resynthesized_notes': record[blobid]['text'],
                                              'patient_pubid': fake_id,
                                              'service_date': service_dts[blobid].strftime("%Y-%m-%d %H:%M:%S.%f")[: -3],
                                              'institution': note_metadata["instit"],
                                              'note_type': note_metadata["cd_descr"]},
                                             indent=4, sort_keys=True)
-                    # save annotated notes to s3
-                    common.write_to_s3(blobid,
+                    # save annotated notes to object store
+                    common.write_to_storage(blobid,
                                        hdcpupdatedate,
-                                       string_payload=file_to_s3,
+                                       payload=json_obj_to_store,
                                        key='deid_test/annotated_note/{id}.json'.format(id=blobid))
 
                 except common.OutOfDateAnnotationException as e:
                     print("OutOfDateAnnotationException occurred: {}".format(e))
                     time_of_error = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
-                    common.log_error_message(blobid, hdcpupdatedate=hdcpupdatedate, state='Save Resynth S3',
+                    common.log_error_message(blobid, hdcpupdatedate=hdcpupdatedate, state='Save Resynth to Object Store',
                                              time=time_of_error,
                                              error_message=str(e))
                 except Exception as e:

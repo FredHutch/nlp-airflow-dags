@@ -1,9 +1,10 @@
 from datetime import datetime
+from contextlib import closing
+
+from sci.store import swift, s3
 from airflow.hooks.mssql_hook import MsSqlHook
 from airflow.hooks.postgres_hook import PostgresHook
-from airflow.hooks.S3_hook import S3Hook
 from airflow.models import Variable
-from contextlib import closing
 
 
 __error_db_stage_dict = {"PROD": PostgresHook(postgres_conn_id="prod-airflow-nlp-pipeline"),
@@ -18,20 +19,35 @@ __airflow_nlp_db_stage_dict = {"PROD": PostgresHook(postgres_conn_id="prod-airfl
 __annotations_db_stage_dict = {"PROD": MsSqlHook(mssql_conn_id="nile"),
                                "DEV": MsSqlHook(mssql_conn_id="test_nile")
                                }
-__s3_hook_stage_dict = {"PROD": S3Hook('fh-nlp-deid-s3'),
-                        "DEV": S3Hook('fh-nlp-deid-s3')
-                        }
-__s3_bucket_stage_dict = {"PROD": "fh-nlp-deid",
-                          "DEV": "fh-nlp-deid"
-                          }
+__storage_dict = {'SWIFT':
+                    {"PROD":'Swift__HDC_project_uw-clinic-notes',
+                     "DEV":'AUTH_Swift__HDC'},
+                  'S3':
+                    {"PROD": 'fh-nlp-deid-s3',
+                     "DEV": 'fh-nlp-deid-s3'}
+                 }
+__bucket_dict = {'SWIFT':
+                  {"PROD": "fh-nlp-deid",
+                   "DEV": "fh-nlp-deid"},
+                'S3':
+                    {"PROD": 'fh-nlp-deid-swift',
+                     "DEV": 'fh-nlp-deid-swift'}
+                }
+__storage_writer = {'SWIFT':swift,
+                    'S3':s3}
 
 STAGE = Variable.get("NLP_ENVIRON")
+# safety in hardcoding for now - TODO - should eventually be changed to an ENV VAR
+STORAGE = 'SWIFT'
+MYSTOR = __storage_writer[STORAGE](__bucket_dict[STORAGE][STAGE])
+
 ERROR_DB = __error_db_stage_dict[STAGE]
 SOURCE_NOTE_DB = __source_note_db_stage_dict[STAGE]
 AIRFLOW_NLP_DB = __airflow_nlp_db_stage_dict[STAGE]
 ANNOTATIONS_DB = __annotations_db_stage_dict[STAGE]
-S3 = __s3_hook_stage_dict[STAGE]
-S3_BUCKET_NAME = __s3_bucket_stage_dict[STAGE]
+
+OBJ_STORE = __storage_dict[STORAGE][STAGE]
+BUCKET_NAME = __bucket_stage_dict[STORAGE][STAGE]
 
 JOB_RUNNING = 'scheduled'
 JOB_COMPLETE = 'completed'
@@ -213,25 +229,23 @@ def _get_most_recent_successful_note_job_update_date(blobid):
     return AIRFLOW_NLP_DB.get_first(select_stmt, parameters=(blobid, JOB_COMPLETE))[0]
 
 
-def write_to_s3(blobid, update_date, string_payload, key):
+def write_to_storage(blobid, update_date, payload, key):
     """
-    create S3 hook, upload json object to the bucket
+    create appropriate storage hook, upload json object to the object store (swift or s3)
     :param blobid: the hdcorcablobid for the note object
     :param update_date: the UpdateDate associated with the note object (normally hdcpupdatedate)
     :param string_payload: file to be dropped off
     :param key: file name shown on S3
     """
-    s3_job_date = _get_most_recent_successful_note_job_update_date(blobid)
-    print("Verifying S3 status for blobId: {}, incoming update Date: {}, saved update date: {}".format(
-          blobid, update_date, s3_job_date))
-    if s3_job_date is None or s3_job_date <= update_date:
-        S3.load_string(string_payload,
-                       key,
-                       bucket_name=S3_BUCKET_NAME,
-                       replace=True)
+    job_date = _get_most_recent_successful_note_job_update_date(blobid)
+    print("Verifying storage status for blobId: {}, incoming update Date: {}, saved update date: {}".format(
+          blobid, update_date, job_date))
+    if job_date is None or job_date <= update_date:
+        MYSTOR.object_put_json(key, json.dumps(payload))
         return
 
-    raise OutOfDateAnnotationException("OutOfDateAnnotationException: A newer version of the annotation exists in S3",
+    raise OutOfDateAnnotationException("OutOfDateAnnotationException: \
+                                       A newer version of the annotation exists in Object Storage ",
                                        blobid,
                                        update_date,
-                                       s3_job_date)
+                                       job_date)
