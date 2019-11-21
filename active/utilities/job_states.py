@@ -1,0 +1,14 @@
+JOB_RUNNING = 'scheduled'
+JOB_COMPLETE = 'completed'
+JOB_FAILURE = 'failed'
+
+## Brat Specific
+BRAT_PENDING = 'PENDING REVIEW'
+BRAT_READY_TO_EXTRACT = "EXTRACTION READY"
+BRAT_COMPLETE = "REVIEW COMPLETE"
+
+
+## NLP task related
+NLP_NER_PENDING = "NER Pending"
+NLP_NER_COMPLETE = "NER Complete"
+NLP_NER_FAILED = "NER Failed"
