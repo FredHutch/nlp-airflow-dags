@@ -24,10 +24,24 @@ dag = DAG(dag_id=DAG_NAME,
           default_args=args,
           dagrun_timeout=timedelta(seconds=30))
 
+generate_job_id = \
+    PythonOperator(task_id='generate_job_id',
+                   provide_context=True,
+                   python_callable=ner.generate_job_id.generate_job_id,
+                   dag=dag)
 
-generate_job_id = ner.generate_job_id(dag=dag, default_args=args)
+call_flask_blob_nlp = \
+    PythonOperator(task_id='call_flask_blob_nlp',
+                   provide_context=True,
+                   python_callable=ner.ner._call_flask_blob_nlp,
+                   dag=dag)
 
-populate_blobid_in_job_table_operator = ner.populate_blobid_in_job_table_operator(dag=dag, default_args=args)
+populate_blobid_in_job_table_operator = \
+    PythonOperator(task_id='populate_blobid_in_job_table_operator',
+                   provide_context=True,
+                   python_callable=ner.populate_blobid_in_job_table.populate_blobid_in_job_table,
+                   dag=dag)
+
 
 run_ner_tasks_and_save_to_source = \
     SubDagOperator(task_id=CHILD_DAG_NAME,
@@ -39,7 +53,7 @@ run_ner_tasks_and_save_to_source = \
 
 
 
-generate_job_id >> populate_blobid_in_job_table_operator >> run_ner_tasks_and_save_to_source
+generate_job_id >> call_flask_blob_nlp >> populate_blobid_in_job_table_operator >> run_ner_tasks_and_save_to_source
 
 
 

@@ -1,3 +1,6 @@
+import os
+import json
+import swiftclient
 from datetime import datetime
 from contextlib import closing
 
@@ -5,6 +8,7 @@ from sci.store import swift, s3
 from airflow.hooks.mssql_hook import MsSqlHook
 from airflow.hooks.postgres_hook import PostgresHook
 from airflow.models import Variable
+from airflow.hooks.http_hook import HttpHook
 
 
 __error_db_stage_dict = {"PROD": PostgresHook(postgres_conn_id="prod-airflow-nlp-pipeline"),
@@ -62,6 +66,19 @@ REVIEW_BYPASSED_ANNOTATION_TYPE = 'REVIEW BYPASSED'
 DEID_ANNOTATION_TYPE = 'DEID ANNOTATIONS'
 RESYNTH_ANNOTATION_TYPE = 'RESYNTHESIZED ANNOTATIONS'
 
+
+## To-do
+## due to
+container_name = 'NLP'
+swift_conn = swiftclient.Connection(
+    user=os.getenv('OS_TENANT_NAME'),
+    key=os.getenv('OS_AUTH_TOKEN'),
+    authurl=os.getenv("OS_AUTH_URL"),
+)
+
+# to-do
+# add api_hook to airflow
+flasknlobnlp_api_hook = HttpHook(http_conn_id='fh-nlp-api-flask-blob-nlp', method='POST')
 
 class OutOfDateAnnotationException(Exception):
     def __init__(self, message, blobid, blob_date, compared_date):
@@ -228,8 +245,28 @@ def _get_most_recent_successful_note_job_update_date(blobid):
 
     return AIRFLOW_NLP_DB.get_first(select_stmt, parameters=(blobid, JOB_COMPLETE))[0]
 
+def _get_most_recent_ner_completed_date(blobid):
+    select_stmt = "SELECT MAX(job_start)" \
+                  " FROM af_ner_runs" \
+                  " WHERE hdcorcablobid = %s AND job_status = %s"
+    AIRFLOW_NLP_DB.run(select_stmt,
+                       parameters=(blobid, JOB_RUNNING))
 
-def write_to_storage(blobid, update_date, payload, key):
+    return
+
+def _get_file_update_date_on_storage(store_connection, container):
+    """
+    get all the blobs and update date from swift
+    return {'blob filename': 'last modified date', ...}
+    """
+    if type(store_connection) == swiftclient.client.Connection:
+
+        return {data['name']:data['last_modified']
+                for data in store_connection.get_container(container)[1]}
+    else:
+        print('Connection {} is not valid'.format(store_connection))
+
+def write_to_storage(blobid, update_date, payload, key, connection):
     """
     create appropriate storage hook, upload json object to the object store (swift or s3)
     :param blobid: the hdcorcablobid for the note object
@@ -241,7 +278,7 @@ def write_to_storage(blobid, update_date, payload, key):
     print("Verifying storage status for blobId: {}, incoming update Date: {}, saved update date: {}".format(
           blobid, update_date, job_date))
     if job_date is None or job_date <= update_date:
-        MYSTOR.object_put_json(key, json.dumps(payload))
+        connection.object_put_json(key, json.dumps(payload))
         return
 
     raise OutOfDateAnnotationException("OutOfDateAnnotationException: \
@@ -249,3 +286,19 @@ def write_to_storage(blobid, update_date, payload, key):
                                        blobid,
                                        update_date,
                                        job_date)
+
+
+def read_from_storage(blobid, connection):
+    """
+    create appropriate storage hook, upload json object to the object store (swift or s3)
+    :param key: file name shown on swift or s3, named by blobid
+    """
+    key = '{}.json'.format(blobid)
+    job_date = _get_most_recent_ner_completed_date(blobid)
+    update_date = _get_file_update_date_on_storage(swift_conn, container_name).get(key)
+
+    print("blobId: {} was updated on {}, after last NER task ran on {}".format(
+        blobid, update_date, job_date))
+
+    if job_date is None or job_date <= update_date:
+       return connection.object_get_json(key)
