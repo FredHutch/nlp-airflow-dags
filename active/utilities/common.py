@@ -47,7 +47,7 @@ AIRFLOW_NLP_DB = __airflow_nlp_db_stage_dict[STAGE]
 ANNOTATIONS_DB = __annotations_db_stage_dict[STAGE]
 
 OBJ_STORE = __storage_dict[STORAGE][STAGE]
-BUCKET_NAME = __bucket_stage_dict[STORAGE][STAGE]
+BUCKET_NAME = __bucket_dict[STORAGE][STAGE]
 
 JOB_RUNNING = 'scheduled'
 JOB_COMPLETE = 'completed'

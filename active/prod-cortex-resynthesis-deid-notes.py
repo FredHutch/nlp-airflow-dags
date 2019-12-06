@@ -6,8 +6,7 @@ from airflow.operators.python_operator import PythonOperator
 from airflow.models import DAG
 
 import utilities.common as common
-from utilities.common import JOB_RUNNING, JOB_COMPLETE, JOB_FAILURE, 
-                            REVIEW_BYPASSED_ANNOTATION_TYPE, BRAT_REVIEWED_ANNOTATION_TYPE
+from utilities.common import JOB_RUNNING, JOB_COMPLETE, JOB_FAILURE, REVIEW_BYPASSED_ANNOTATION_TYPE, BRAT_REVIEWED_ANNOTATION_TYPE
 
 
 args = {
