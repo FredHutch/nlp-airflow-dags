@@ -36,12 +36,7 @@ call_flask_blob_nlp = \
                    python_callable=ner.ner._call_flask_blob_nlp,
                    dag=dag)
 
-populate_blobid_in_job_table_operator = \
-    PythonOperator(task_id='populate_blobid_in_job_table_operator',
-                   provide_context=True,
-                   python_callable=ner.populate_blobid_in_job_table.populate_blobid_in_job_table,
-                   dag=dag)
-
+populate_blobid_in_job_table_operator = ner.populate_blobid_in_job_table.populate_blobid_in_job_table(dag=dag, default_args=args)
 
 run_ner_tasks_and_save_to_source = \
     SubDagOperator(task_id=CHILD_DAG_NAME,

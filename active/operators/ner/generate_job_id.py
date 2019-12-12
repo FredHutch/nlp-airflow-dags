@@ -25,7 +25,7 @@ def generate_job_id(**kwargs):
     # then pull record id with new update date from source
     job_start_date = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
     datecreated = []
-    blob_job_queue = _get_blobs_since_date(common.swift_conn, common.container_name, last_ner_update_date)
+    blob_job_queue = _get_blobs_since_date(date=last_ner_update_date, state=job_states.JOB_COMPLETE)
 
     if blob_job_queue is None:
         print("No new records found since last update date: {}".format(last_ner_update_date))
@@ -50,30 +50,18 @@ def _insert_ner_scheduled(run_id, update_date, job_start_date):
     return
 
 
-def _get_blobs_since_date(store_connection, container, last_ner_update_date):
-    """
-    get all the blobs and update date from swift
-    return {'blob filename': 'last modified date', ...}
-    To-do: create a job status table to track run status.
-    """
-    if type(store_connection) == swiftclient.client.Connection:
-
-        return {data['name']:data['last_modified']
-                for data in store_connection.get_container(container)[1]\
-                if 'swift_test' in data['name']\
-                and data['last_modified'] >= last_ner_update_date}
-    else:
-        print('Input {} is not valid'.format(store_connection))
-        return None
-
-
+def _get_blobs_since_date(date, state):
+    tgt_update_stmt = "SELECT hdcorcablobid, hdcpupdatedate" \
+                      "FROM af_resynthesis_runs_details" \
+                      "WHERE hdcpupdatedate >= %s" \
+                      "AND resynth_status == %s "
+    return common.AIRFLOW_NLP_DB.get_records(tgt_update_stmt, parameters=(date, state), autocommit=True)
 
 def _get_last_ner_run_id():
     tgt_select_stmt = "SELECT max(af_ner_runs_id) FROM af_ner_runs"
     last_run_id = (common.AIRFLOW_NLP_DB.get_first(tgt_select_stmt) or (None,))
 
     return last_run_id[0]
-
 
 
 def _get_last_ner_update_date():

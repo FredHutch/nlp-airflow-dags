@@ -11,13 +11,13 @@ def populate_blobid_in_job_table(**kwargs):
     # get record id to be processed
     src_select_stmt = "SELECT DISTINCT hdcorcablobid, hdcpupdatedate FROM annotations WHERE date_created = %s"
     # get completed jobs so that we do not repeat completed work
-    screen_complete_stmt = "SELECT hdcorcablobid, hdcpupdatedate, resynth_date from af_resynthesis_runs_details  " \
-                           "WHERE resynth_status = %s"
+    screen_complete_stmt = "SELECT hdcorcablobid, hdcpupdatedate, ner_date from af_ner_runs_details  " \
+                           "WHERE ner_status = %s"
     complete_job_rows = common.AIRFLOW_NLP_DB.get_records(screen_complete_stmt, parameters=(job_states.JOB_COMPLETE,))
     complete_jobs = {(row[0], row[1]): row[2] for row in complete_job_rows}
 
-    tgt_insert_stmt = "INSERT INTO af_resynthesis_runs_details " \
-                      "(af_resynth_runs_id, hdcpupdatedate, hdcorcablobid, annotation_creation_date, resynth_status) " \
+    tgt_insert_stmt = "INSERT INTO af_ner_runs_details " \
+                      "(af_ner_runs_id, hdcpupdatedate, hdcorcablobid, annotation_creation_date, ner_status) " \
                       "VALUES (%s, %s, %s, %s, %s) "
 
     for creation_date in datecreated:
