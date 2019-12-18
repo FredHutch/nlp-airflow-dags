@@ -152,6 +152,10 @@ def log_error_and_failure_for_resynth_note_job(run_id, blobid, hdcpupdatedate, m
                       "WHERE af_resynth_runs_id = %s and hdcpupdatedate = %s and hdcorcablobid in (%s)"
     _log_failure(run_id, blobid, hdcpupdatedate, message, state, tgt_update_stmt)
 
+def log_error_and_failure_for_ner_job(run_id, blobid, hdcpupdatedate, message, state):
+    tgt_update_stmt = "UPDATE af_ner_runs_details SET ner_status = %s, ner_date = %s " \
+                      "WHERE af_ner_runs_id = %s and hdcpupdatedate = %s and hdcorcablobid in (%s)"
+    _log_failure(run_id, blobid, hdcpupdatedate, message, state, tgt_update_stmt)
 
 def _log_failure(run_id, blobid, hdcpupdatedate, message, state, update_stmt):
     time_of_error = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
@@ -254,17 +258,16 @@ def _get_most_recent_ner_completed_date(blobid):
 
     return
 
-def _get_file_update_date_on_storage(store_connection, container):
+def _get_file_update_date_on_storage(blobid):
     """
     get all the blobs and update date from swift
     return {'blob filename': 'last modified date', ...}
     """
-    if type(store_connection) == swiftclient.client.Connection:
+    select_stmt = "SELECT MAX(resynth_date)" \
+                  " FROM af_resynthesis_runs_details" \
+                  " WHERE hdcorcablobid = %s AND resynth_status = %s"
 
-        return {data['name']:data['last_modified']
-                for data in store_connection.get_container(container)[1]}
-    else:
-        print('Connection {} is not valid'.format(store_connection))
+    return AIRFLOW_NLP_DB.get_first(select_stmt, parameters=(blobid, JOB_COMPLETE))[0]
 
 def write_to_storage(blobid, update_date, payload, key, connection):
     """
@@ -293,12 +296,11 @@ def read_from_storage(blobid, connection):
     create appropriate storage hook, upload json object to the object store (swift or s3)
     :param key: file name shown on swift or s3, named by blobid
     """
-    key = '{}.json'.format(blobid)
     job_date = _get_most_recent_ner_completed_date(blobid)
-    update_date = _get_file_update_date_on_storage(swift_conn, container_name).get(key)
+    update_date = _get_file_update_date_on_storage(blobid)
 
     print("blobId: {} was updated on {}, after last NER task ran on {}".format(
         blobid, update_date, job_date))
 
     if job_date is None or job_date <= update_date:
-       return connection.object_get_json(key)
+       return connection.object_get_json('deid_test/annotated_note/{id}.json'.format(id=blobid))

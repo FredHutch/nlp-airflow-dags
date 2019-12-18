@@ -1,12 +1,9 @@
 from datetime import datetime, timedelta
-import json
 
 from airflow.hooks.http_hook import HttpHook
 from airflow.operators.python_operator import PythonOperator
 from airflow.models import DAG
 from airflow.operators.subdag_operator import SubDagOperator
-import active.utilities.common as common
-from active.utilities.common import JOB_RUNNING, JOB_COMPLETE, JOB_FAILURE, REVIEW_BYPASSED_ANNOTATION_TYPE, BRAT_REVIEWED_ANNOTATION_TYPE
 import active.operators.ner as ner
 
 DAG_NAME = 'prod-cortex-ner-tasks-on-resynthed-notes'
