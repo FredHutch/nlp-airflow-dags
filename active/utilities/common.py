@@ -1,3 +1,5 @@
+import json
+import os
 from datetime import datetime
 from contextlib import closing
 
@@ -37,6 +39,12 @@ __storage_writer = {'SWIFT':swift,
                     'S3':s3}
 
 STAGE = Variable.get("NLP_ENVIRON")
+os.environ['OS_AUTH_URL'] =  Variable.get('OS_AUTH_URL')
+os.environ['OS_PASSWORD'] = Variable.get('OS_PASSWORD')
+os.environ['OS_TENANT_NAME'] = Variable.get('OS_TENANT_NAME')
+os.environ['OS_USERNAME'] = Variable.get('OS_USERNAME')
+
+
 # safety in hardcoding for now - TODO - should eventually be changed to an ENV VAR
 STORAGE = 'SWIFT'
 MYSTOR = __storage_writer[STORAGE](__bucket_dict[STORAGE][STAGE])
