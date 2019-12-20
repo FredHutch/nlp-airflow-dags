@@ -98,6 +98,8 @@ __set_autocommit_on_db_hook(ANNOTATIONS_DB)
 def log_error_message(blobid, hdcpupdatedate, state, time, error_message):
     tgt_insert_stmt = "INSERT INTO af_errors (hdcorcablobid, state, datetime, message, hdcpupdatedate) VALUES (%s, %s, %s, %s, %s)"
     #print error_message here since we're doing it on every call already
+    if type(error_message) is not str:
+        error_message = repr(error_message)
     print(error_message)
     ERROR_DB.run(tgt_insert_stmt,
                  parameters=(blobid, state, time, error_message, hdcpupdatedate),
