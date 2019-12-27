@@ -165,8 +165,7 @@ def _get_annotations_by_id_and_created_date(blobid, date):
 def _call_resynthesis_api(blobid, hdcpupdatedate, deid_note, deid_annotations, deid_alias):
     api_hook = HttpHook(http_conn_id='fh-nlp-api-resynth', method='POST')
     results = None
-    print("resynth post data for blob {}: {}".format(
-        blobid, {"text": deid_note, "annotations": deid_annotations, "alias": deid_alias}))
+    print("resynth post data for blob {}".format(blobid)
     try:
         resp = api_hook.run("/resynthesize",
                             data=json.dumps({"text": deid_note, "annotations": deid_annotations,
