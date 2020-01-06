@@ -41,6 +41,12 @@ __storage_writer = {'SWIFT':swift,
                     'S3':s3}
 
 STAGE = Variable.get("NLP_ENVIRON")
+os.environ['OS_AUTH_URL'] =  Variable.get('OS_AUTH_URL')
+os.environ['OS_PASSWORD'] = Variable.get('OS_PASSWORD')
+os.environ['OS_TENANT_NAME'] = Variable.get('OS_TENANT_NAME')
+os.environ['OS_USERNAME'] = Variable.get('OS_USERNAME')
+
+
 # safety in hardcoding for now - TODO - should eventually be changed to an ENV VAR
 STORAGE = 'SWIFT'
 MYSTOR = __storage_writer[STORAGE](__bucket_dict[STORAGE][STAGE])
@@ -51,7 +57,7 @@ AIRFLOW_NLP_DB = __airflow_nlp_db_stage_dict[STAGE]
 ANNOTATIONS_DB = __annotations_db_stage_dict[STAGE]
 
 OBJ_STORE = __storage_dict[STORAGE][STAGE]
-BUCKET_NAME = __bucket_stage_dict[STORAGE][STAGE]
+BUCKET_NAME = __bucket_dict[STORAGE][STAGE]
 
 JOB_RUNNING = 'scheduled'
 JOB_COMPLETE = 'completed'
@@ -107,6 +113,8 @@ __set_autocommit_on_db_hook(ANNOTATIONS_DB)
 def log_error_message(blobid, hdcpupdatedate, state, time, error_message):
     tgt_insert_stmt = "INSERT INTO af_errors (hdcorcablobid, state, datetime, message, hdcpupdatedate) VALUES (%s, %s, %s, %s, %s)"
     #print error_message here since we're doing it on every call already
+    if type(error_message) is not str:
+        error_message = repr(error_message)
     print(error_message)
     ERROR_DB.run(tgt_insert_stmt,
                  parameters=(blobid, state, time, error_message, hdcpupdatedate),

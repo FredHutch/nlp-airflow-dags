@@ -178,7 +178,7 @@ def save_note_to_temp_storage(blobid, hdcpupdatedate, metadata_dict):
                   "(hdcorcablobid, hdcpupdatedate, clinical_event_id, person_id, " \
                   "blob_contents, service_dt_time, institution, event_class_cd_descr) " \
                   "VALUES (%s, %s, %s, %s, %s, %s, %s, %s)"
-    print("saving metadata to temp storage for {}, {}: {}".format(blobid, hdcpupdatedate, metadata_dict))
+    print("saving metadata to temp storage for {}, {}".format(blobid, hdcpupdatedate))
     common.ANNOTATIONS_DB.run(insert_stmt, parameters=(blobid,
                                                        hdcpupdatedate,
                                                        metadata_dict["clinical_event_id"],
@@ -240,7 +240,6 @@ def annotate_clinical_notes(**kwargs):
             try:
                 resp = api_hook.run("/deid/annotate", data=json.dumps(record['original_note']),
                                     headers={"Content-Type": "application/json"})
-                print("API response: {}".format(resp.content))
                 record['annotated_note'] = json.loads(resp.content)
                 annotation_status = JOB_COMPLETE
                 batch_records[blobid] = record
