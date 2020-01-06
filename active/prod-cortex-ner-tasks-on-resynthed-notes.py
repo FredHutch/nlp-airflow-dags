@@ -1,10 +1,9 @@
 from datetime import datetime, timedelta
 
-from airflow.hooks.http_hook import HttpHook
 from airflow.operators.python_operator import PythonOperator
 from airflow.models import DAG
 from airflow.operators.subdag_operator import SubDagOperator
-import active.operators.ner as ner
+import operators.ner as ner
 
 DAG_NAME = 'prod-cortex-ner-tasks-on-resynthed-notes'
 CHILD_DAG_NAME = 'populate_blobid_in_job_table'

@@ -2,9 +2,9 @@ from airflow.models import DAG
 from airflow.operators.python_operator import PythonOperator
 from airflow.operators.subdag_operator import SubDagOperator
 
-import active.utilities.common as common
-import active.utilities.job_states as job_states
-import active.operators.ner as ner
+import utilities.common as common
+import utilities.job_states as job_states
+import operators.ner as ner
 
 from datetime import datetime
 import json

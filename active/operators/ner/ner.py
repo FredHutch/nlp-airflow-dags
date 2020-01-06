@@ -1,9 +1,8 @@
 import json
 from datetime import datetime
-from active.operators.ner.generate_job_id import _get_last_ner_update_date
-import active.utilities.job_states as job_states
+from operators.ner.generate_job_id import _get_last_ner_update_date
 
-import active.utilities.common as common
+import utilities.common as common
 
 
 def _call_flask_blob_nlp(blobid):

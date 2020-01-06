@@ -1,5 +1,5 @@
-import active.utilities.common as common
-import active.utilities.job_states as job_states
+import utilities.common as common
+import utilities.job_states as job_states
 
 from airflow.operators.python_operator import PythonOperator
 
