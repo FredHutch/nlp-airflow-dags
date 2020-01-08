@@ -1,6 +1,5 @@
 import os
 import json
-import swiftclient
 from datetime import datetime
 from contextlib import closing
 
@@ -31,11 +30,11 @@ __storage_dict = {'SWIFT':
                      "DEV": 'fh-nlp-deid-s3'}
                  }
 __bucket_dict = {'SWIFT':
-                  {"PROD": "fh-nlp-deid",
-                   "DEV": "fh-nlp-deid"},
+                  {"PROD": "NLP/fh-nlp-deid-swift",
+                   "DEV": "NLP/fh-nlp-deid-swift-dev"},
                 'S3':
-                    {"PROD": 'fh-nlp-deid-swift',
-                     "DEV": 'fh-nlp-deid-swift'}
+                    {"PROD": 'fh-nlp-deid',
+                     "DEV": 'fh-nlp-deid'}
                 }
 __storage_writer = {'SWIFT':swift,
                     'S3':s3}
@@ -72,15 +71,6 @@ REVIEW_BYPASSED_ANNOTATION_TYPE = 'REVIEW BYPASSED'
 DEID_ANNOTATION_TYPE = 'DEID ANNOTATIONS'
 RESYNTH_ANNOTATION_TYPE = 'RESYNTHESIZED ANNOTATIONS'
 
-
-## To-do
-## due to
-container_name = 'NLP'
-swift_conn = swiftclient.Connection(
-    user=os.getenv('OS_TENANT_NAME'),
-    key=os.getenv('OS_AUTH_TOKEN'),
-    authurl=os.getenv("OS_AUTH_URL"),
-)
 
 # to-do
 # add api_hook to airflow
