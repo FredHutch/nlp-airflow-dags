@@ -23,9 +23,9 @@ dag = DAG(dag_id='prod-cortex-resynthesis-deid-notes',
 
 
 def _insert_resynth_run_job(run_id, update_date, record_count, job_start_date):
-    tgt_insert_stmt = "INSERT INTO af_resynthesis_runs " \
-                      "(af_resynth_runs_id, source_last_update_date, record_counts, job_start, job_status) " \
-                      "VALUES (%s, %s, %s, %s, %s)"
+    tgt_insert_stmt = ("INSERT INTO af_resynthesis_runs "
+                      "(af_resynth_runs_id, source_last_update_date, record_counts, job_start, job_status) "
+                      "VALUES (%s, %s, %s, %s, %s)")
     common.AIRFLOW_NLP_DB.run(tgt_insert_stmt,
                               parameters=(run_id, update_date, record_count, job_start_date, JOB_RUNNING))
 
@@ -35,12 +35,10 @@ def _insert_resynth_run_job(run_id, update_date, record_count, job_start_date):
 def _get_annotations_since_date(update_date_from_last_run):
     # get last update date from source since last successful run
     # then pull record id with new update date from source
-    src_select_stmt = "SELECT date_created, count(*) " \
-                      "FROM annotations " \
-                      "WHERE date_created >= %s " \
-                      "AND (category = %s " \
-                      "     OR category = %s) " \
-                      "GROUP BY date_created "
+    src_select_stmt = ("SELECT date_created, count(*) "
+                      "FROM annotations "
+                      "WHERE date_created >= %s AND (category = %s OR category = %s) "
+                      "GROUP BY date_created ")
 
     return common.ANNOTATIONS_DB.get_records(src_select_stmt,
                                              parameters=(update_date_from_last_run,
@@ -104,14 +102,14 @@ def populate_blobid_in_job_table(**kwargs):
     # get record id to be processed
     src_select_stmt = "SELECT DISTINCT hdcorcablobid, hdcpupdatedate FROM annotations WHERE date_created = %s"
     # get completed jobs so that we do not repeat completed work
-    screen_complete_stmt = "SELECT hdcorcablobid, hdcpupdatedate, resynth_date from af_resynthesis_runs_details  " \
-                           "WHERE resynth_status = %s"
+    screen_complete_stmt = ("SELECT hdcorcablobid, hdcpupdatedate, resynth_date from af_resynthesis_runs_details  "
+                           "WHERE resynth_status = %s")
     complete_job_rows = common.AIRFLOW_NLP_DB.get_records(screen_complete_stmt, parameters=(JOB_COMPLETE,))
     complete_jobs = {(row[0], row[1]): row[2] for row in complete_job_rows}
 
-    tgt_insert_stmt = "INSERT INTO af_resynthesis_runs_details " \
-                      "(af_resynth_runs_id, hdcpupdatedate, hdcorcablobid, annotation_creation_date, resynth_status) " \
-                      "VALUES (%s, %s, %s, %s, %s) "
+    tgt_insert_stmt = ("INSERT INTO af_resynthesis_runs_details "
+                      "(af_resynth_runs_id, hdcpupdatedate, hdcorcablobid, annotation_creation_date, resynth_status) "
+                      "VALUES (%s, %s, %s, %s, %s) ")
 
     for creation_date in datecreated:
         for row in common.ANNOTATIONS_DB.get_records(src_select_stmt, parameters=(creation_date,)):
@@ -125,8 +123,8 @@ def populate_blobid_in_job_table(**kwargs):
 
 
 def _get_resynth_run_details_id_by_creation_date(run_id, date):
-    tgt_select_stmt = "SELECT hdcorcablobid, hdcpupdatedate FROM af_resynthesis_runs_details " \
-                      "WHERE af_resynth_runs_id = %s and annotation_creation_date = %s and resynth_status = %s"
+    tgt_select_stmt = ("SELECT hdcorcablobid, hdcpupdatedate FROM af_resynthesis_runs_details "
+                      "WHERE af_resynth_runs_id = %s and annotation_creation_date = %s and resynth_status = %s")
 
     return common.AIRFLOW_NLP_DB.get_records(tgt_select_stmt, parameters=(run_id, date, JOB_RUNNING))
 
@@ -142,9 +140,9 @@ def _update_resynth_run_details_to_failed(run_id, blobid, date):
 
 
 def _update_resynth_run_details_by_id_and_date(run_id, blobid, date, state):
-    tgt_update_stmt = "UPDATE af_resynthesis_runs_details " \
-                      "SET resynth_status = %s, resynth_date = %s " \
-                      "WHERE af_resynth_runs_id = %s and hdcpupdatedate = %s and hdcorcablobid in (%s)"
+    tgt_update_stmt = ("UPDATE af_resynthesis_runs_details "
+                      "SET resynth_status = %s, resynth_date = %s "
+                      "WHERE af_resynth_runs_id = %s and hdcpupdatedate = %s and hdcorcablobid in (%s)")
 
     common.AIRFLOW_NLP_DB.run(tgt_update_stmt,
                               parameters=(
@@ -152,10 +150,10 @@ def _update_resynth_run_details_by_id_and_date(run_id, blobid, date, state):
 
 
 def _get_annotations_by_id_and_created_date(blobid, date):
-    src_select_stmt = "SELECT annotation FROM annotations " \
-                      "WHERE date_created = %s and hdcorcablobid = %s " \
-                      "AND (category = %s " \
-                      "     OR category = %s)"
+    src_select_stmt = ("SELECT annotation FROM annotations "
+                      "WHERE date_created = %s and hdcorcablobid = %s "
+                      "AND (category = %s "
+                      "     OR category = %s)")
 
     return common.ANNOTATIONS_DB.get_records(src_select_stmt, parameters=(
                                              date, blobid, REVIEW_BYPASSED_ANNOTATION_TYPE,
@@ -218,9 +216,9 @@ def _get_patient_data_from_temp(blobid, hdcpupdatedate, patientid):
     print(
         "Fetching Real Patient Name Data from Temp DB for blobID: {blobid}, hdcpupdatedate: {date}, patientId: {patientid}".format(
             blobid=blobid, date=hdcpupdatedate, patientid=patientid))
-    pt_select_stmt = ("SELECT hdcorcablobid, hdcpupdatedate, person_id, GivenName, MiddleName, FamilyName"
+    pt_select_stmt = ("SELECT HDCOrcaBlobId, HDCPUpdateDate, Person_ID, GivenName, MiddleName, FamilyName"
                       " FROM temp_person"
-                      " WHERE hdcorcablobid = %s AND hdcpupdatedate = %s AND person_id = %s")
+                      " WHERE HDCOrcaBlobId = %s AND HDCPUpdateDate = %s AND HDCPersonId = %s")
     ret = (common.ANNOTATIONS_DB.get_first(pt_select_stmt, parameters=(blobid, hdcpupdatedate, patientid))
             or (None, None, None, None, None, None))
     if ret[0] is None:
@@ -234,9 +232,8 @@ def _get_patient_data_from_temp(blobid, hdcpupdatedate, patientid):
 def _get_alias_data(patientid):
     print("Fetching Alias Name Data from Source DB for patientId: {}".format(patientid))
     al_select_stmt = ("SELECT FakeId, DateshiftDays, FirstName, MiddleName, LastName"
-                      " FROM PatientMap JOIN PersonCurrentIdentifiers"
-                      " ON PersonCurrentIdentifiers.HDCPersonID = PatientMap.HdcPersonID"
-                      " WHERE PersonCurrentIdentifiers.OrcaPersonID = %s")
+                      " FROM PatientMap"
+                      " WHERE HDCPersonID = %s")
     return (common.SOURCE_NOTE_DB.get_first(al_select_stmt, parameters=(patientid,))
             or (None, None, None, None, None))
 

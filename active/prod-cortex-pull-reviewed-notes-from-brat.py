@@ -50,14 +50,14 @@ def _update_job_status_by_directory_loc(directory_locations):
     update_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
     sql_quote_escapes_locations = "'" + "','".join(directory_locations) + "'"
     tgt_update_stmt = """
-                UPDATE brat_review_status 
-                SET job_status = '{extract_status}', last_update_date = '{date}' 
-                WHERE job_status like '{review_status}'
-                  AND directory_location in ({locations})
-                """.format(extract_status=BRAT_READY_TO_EXTRACT,
-                           date=update_time,
-                           review_status=BRAT_PENDING,
-                           locations=sql_quote_escapes_locations)
+                      UPDATE brat_review_status 
+                      SET job_status = '{extract_status}', last_update_date = '{date}' 
+                      WHERE job_status like '{review_status}'
+                      AND directory_location in ({locations})
+                      """.format(extract_status=BRAT_READY_TO_EXTRACT,
+                                 date=update_time,
+                                 review_status=BRAT_PENDING,
+                                 locations=sql_quote_escapes_locations)
 
     common.AIRFLOW_NLP_DB.run(tgt_update_stmt)
 
