@@ -30,7 +30,7 @@ def _call_flask_blob_nlp(blobid):
 
     except Exception as e:
         print("Exception occurred: {}".format(e))
-        time_of_error = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
+        time_of_error = datetime.now().strftime(common.DT_FORMAT)[:-3]
         common.log_error_message(blobid=blobid, state="FlaskBlobNLP API",
                                  time=time_of_error, error_message=str(e))
         return None

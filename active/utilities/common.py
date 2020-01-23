@@ -1,14 +1,13 @@
-import os
 import json
-from datetime import datetime
+import os
 from contextlib import closing
+from datetime import datetime
 
-from sci.store import swift, s3
+from airflow.hooks.http_hook import HttpHook
 from airflow.hooks.mssql_hook import MsSqlHook
 from airflow.hooks.postgres_hook import PostgresHook
 from airflow.models import Variable
-from airflow.hooks.http_hook import HttpHook
-
+from sci.store import swift, s3
 
 __error_db_stage_dict = {"PROD": PostgresHook(postgres_conn_id="prod-airflow-nlp-pipeline"),
                          "DEV": PostgresHook(postgres_conn_id="dev-airflow-nlp-pipeline")
@@ -71,6 +70,9 @@ REVIEW_BYPASSED_ANNOTATION_TYPE = 'REVIEW BYPASSED'
 DEID_ANNOTATION_TYPE = 'DEID ANNOTATIONS'
 RESYNTH_ANNOTATION_TYPE = 'RESYNTHESIZED ANNOTATIONS'
 
+#the default 'beginning time' for any date-based choosing strategies
+DT_FORMAT = "%Y-%m-%d %H:%M:%S.%f"
+EPOCH = Variable.get("EPOCH", datetime(1970, 1, 1).strftime(DT_FORMAT)[:-3])
 
 # to-do
 # add api_hook to airflow
@@ -296,4 +298,4 @@ def read_from_storage(blobid, connection):
         blobid, update_date, job_date))
 
     if job_date is None or job_date <= update_date:
-       return connection.object_get_json('deid_test/annotated_note/{id}.json'.format(id=blobid))
+        return connection.object_get_json('deid_test/annotated_note/{id}.json'.format(id=blobid))
