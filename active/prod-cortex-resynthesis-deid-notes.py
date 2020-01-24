@@ -69,12 +69,8 @@ def generate_job_id(**kwargs):
         # first run
         update_date_from_last_run = datetime(1970, 1, 1).strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
 
-    last_run_id = _get_last_resynth_run_id()
-
-    if last_run_id is None:
-        new_run_id = 1
-    else:
-        new_run_id = last_run_id + 1
+    last_run_id = (_get_last_resynth_run_id() or 0)
+    new_run_id = last_run_id + 1
 
     print("starting batch run ID: {id} of annotations since {date}".format(id=new_run_id,
                                                                            date=update_date_from_last_run))
