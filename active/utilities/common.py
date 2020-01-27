@@ -39,6 +39,7 @@ __storage_writer = {'SWIFT':swift,
                     'S3':s3}
 
 STAGE = Variable.get("NLP_ENVIRON")
+MAX_BATCH_SIZE = Variable.get("MAX_BATCH_SIZE", 3)
 os.environ['OS_AUTH_URL'] =  Variable.get('OS_AUTH_URL')
 os.environ['OS_PASSWORD'] = Variable.get('OS_PASSWORD')
 os.environ['OS_TENANT_NAME'] = Variable.get('OS_TENANT_NAME')

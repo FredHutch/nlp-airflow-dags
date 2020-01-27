@@ -33,12 +33,8 @@ def generate_job_id(**kwargs):
         # first run
         update_date_from_last_run = datetime(1970, 1, 1).strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
     tgt_select_stmt = "SELECT max(af_runs_id) FROM af_runs"
-    last_run_id = common.AIRFLOW_NLP_DB.get_first(tgt_select_stmt)[0]
-
-    if last_run_id is None:
-        new_run_id = 1
-    else:
-        new_run_id = last_run_id + 1
+    last_run_id = (common.AIRFLOW_NLP_DB.get_first(tgt_select_stmt)[0] or 0)
+    new_run_id = last_run_id + 1
 
     # get last update date from source since last successful run
     # then pull record id with new update date from source
@@ -52,9 +48,18 @@ def generate_job_id(**kwargs):
 
     job_start_date = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
     hdcpupdatedates = []
+    total_job_count = common.MAX_BATCH_SIZE
     for row in common.SOURCE_NOTE_DB.get_records(src_select_stmt, parameters=(update_date_from_last_run,)):
         hdcpupdatedates.append(row[0])
         common.AIRFLOW_NLP_DB.run(tgt_insert_stmt, parameters=(new_run_id, row[0], row[1], job_start_date, JOB_RUNNING))
+        print("Job Batch for hdcpupdatedate: {}  contains {} notes."
+              " {} total notes scheduled".format(row[0], row[1], (common.MAX_BATCH_SIZE - total_job_count)))
+        total_job_count -= row[1]
+        if total_job_count <= 0:
+            print("Job Batch for hdcpupdatedate: {}  contains {} notes"
+                  " and exceeds cumulative total per-run Job Size of {}."
+                  " Breaking early.".format(row[0], row[1], common.MAX_BATCH_SIZE))
+            break
 
     if len(hdcpupdatedates) == 0:
         print("No new records found since last update date: {}".format(update_date_from_last_run))
@@ -68,7 +73,7 @@ def populate_blobid_in_job_table(**kwargs):
     (run_id, hdcpupdatedates) = kwargs['ti'].xcom_pull(task_ids='generate_job_id')
 
     # get record id to be processed
-    src_select_stmt = "SELECT DISTINCT TOP 30 HDCOrcaBlobId FROM vClinicalNoteDiscovery WHERE HDCPUpdateDate = %s"
+    src_select_stmt = "SELECT DISTINCT HDCOrcaBlobId FROM vClinicalNoteDiscovery WHERE HDCPUpdateDate = %s"
     # get completed jobs so that we do not repeat completed work
     screen_complete_stmt = ("SELECT HDCOrcaBlobId, HDCPUpdateDate, annotation_date from af_runs_details  "
                            "WHERE annotation_status = %s")
@@ -78,14 +83,23 @@ def populate_blobid_in_job_table(**kwargs):
     tgt_insert_stmt = ("INSERT INTO af_runs_details (af_runs_id, HDCPUpdateDate, HDCOrcaBlobId, annotation_status) "
                       "VALUES (%s, %s, %s, %s)")
 
+    total_job_count = common.MAX_BATCH_SIZE
     for hdcpupdatedate in hdcpupdatedates:
         for row in common.SOURCE_NOTE_DB.get_records(src_select_stmt, parameters=(hdcpupdatedate,)):
-            print("checking ID: {}".format(row[0]))
+            print("checking ID: {} for previous completion.".format(row[0]))
             if (row[0], hdcpupdatedate) in complete_jobs.keys():
                 print("Job for note {},{} has already been completed on {} . "
                       "Skipping.".format(row[0], hdcpupdatedate, complete_jobs[(row[0], hdcpupdatedate)]))
                 continue
+
             common.AIRFLOW_NLP_DB.run(tgt_insert_stmt, parameters=(run_id, hdcpupdatedate, row[0], JOB_RUNNING))
+            total_job_count -= 1
+            if total_job_count == 0:
+                print("Job Batch for hdcpupdatedate: {}  contains {} notes"
+                      " and exceeds cumulative total per-run Job Size of {}."
+                      " Breaking early.".format(row[0], row[1], common.MAX_BATCH_SIZE))
+                break
+
 
 
 def send_notes_to_brat(**kwargs):
