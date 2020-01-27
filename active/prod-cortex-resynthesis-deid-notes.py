@@ -212,8 +212,8 @@ def _get_patient_data_from_temp(blobid, hdcpupdatedate, patientid):
     print(
         "Fetching Real Patient Name Data from Temp DB for blobID: {blobid}, hdcpupdatedate: {date}, patientId: {patientid}".format(
             blobid=blobid, date=hdcpupdatedate, patientid=patientid))
-    pt_select_stmt = ("SELECT HDCOrcaBlobId, HDCPUpdateDate, Person_ID, GivenName, MiddleName, FamilyName"
-                      " FROM temp_person"
+    pt_select_stmt = ("SELECT HDCOrcaBlobId, HDCPUpdateDate, HDCPersonId, FirstName, MiddleName, LastName"
+                      " FROM TEMP_PERSON"
                       " WHERE HDCOrcaBlobId = %s AND HDCPUpdateDate = %s AND HDCPersonId = %s")
     ret = (common.ANNOTATIONS_DB.get_first(pt_select_stmt, parameters=(blobid, hdcpupdatedate, patientid))
             or (None, None, None, None, None, None))

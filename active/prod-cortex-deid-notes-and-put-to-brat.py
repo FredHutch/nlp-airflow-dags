@@ -189,9 +189,9 @@ def update_brat_db_status(note_id, hdcpupdatedate, directory_location):
 
 def save_note_to_temp_storage(blobid, hdcpupdatedate, metadata_dict):
 
-    insert_stmt = ("INSERT INTO temp_notes (HDCOrcaBlobID, HDCPUpdateDate,"
-                   "CLINICAL_EVENT_ID, PERSON_ID, BLOB_CONTENTS,"
-                   "SERVICE_DT_Time, INSTITUTION, EVENT_CLASS_CD_DESCR) "
+    insert_stmt = ("INSERT INTO TEMP_NOTES (HDCOrcaBlobID, HDCPUpdateDate,"
+                   "CLINICAL_EVENT_ID, HDCPersonId, BLOB_CONTENTS,"
+                   "SERVICE_DT_TM, INSTITUTION, EVENT_CD_DESCR) "
                    "VALUES (%s, %s, %s, %s, %s, %s, %s, %s)")
     print("saving metadata to temp storage for {}, {}".format(blobid, hdcpupdatedate))
 
@@ -206,8 +206,8 @@ def save_note_to_temp_storage(blobid, hdcpupdatedate, metadata_dict):
 
 
 def save_person_info_to_temp_storage(blobid, hdcpupdatedate, patient_data):
-    insert_stmt = ("INSERT INTO temp_person "
-                  "(HDCOrcaBlobId, HDCPUpdateDate, Person_ID, GivenName, MiddleName, FamilyName) "
+    insert_stmt = ("INSERT INTO TEMP_PERSON "
+                  "(HDCOrcaBlobId, HDCPUpdateDate, HDCPersonId, FirstName, MiddleName, LastName) "
                   "VALUES (%s, %s, %s, %s, %s, %s)")
     print("saving person info to temp storage for {}, {}: {}".format(blobid, hdcpupdatedate, patient_data[0]))
     common.ANNOTATIONS_DB.run(insert_stmt, parameters=(blobid,

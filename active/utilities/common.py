@@ -180,8 +180,8 @@ def get_original_note_by_blobid(blobid):
 def get_note_from_temp(blobid, hdcpupdatedate):
     print("Getting Note Metadata from Temp Note DB for BlobId: {id} and HDCPUpdateDate: {date}".format(id=blobid,
                                                                                                     date=hdcpupdatedate))
-    src_select_stmt = ("SELECT CLINICAL_EVENT_ID, HDCOrcaBlobID, HDCPUpdateDate, Person_ID," 
-                       "BLOB_CONTENTS, SERVICE_DT_Time, INSTITUTION, EVENT_CLASS_CD_DESCR " 
+    src_select_stmt = ("SELECT CLINICAL_EVENT_ID, HDCOrcaBlobID, HDCPUpdateDate, HDCPersonID," 
+                       "BLOB_CONTENTS, SERVICE_DT_TM, INSTITUTION, EVENT_CD_DESCR " 
                        "FROM TEMP_NOTES " 
                        "WHERE  HDCOrcaBlobID = %s AND HDCPUpdateDate = %s")
     result = (ANNOTATIONS_DB.get_first(src_select_stmt, parameters=(blobid, hdcpupdatedate))
