@@ -5,6 +5,8 @@ from airflow.operators.subdag_operator import SubDagOperator
 import utilities.common as common
 import utilities.job_states as job_states
 import operators.ner as ner
+import operators.ner.flask_blob_nlp as flask_blob_nlp
+from operators.ner.get_resynthesized_notes import get_resynthesized_note
 
 from datetime import datetime
 import json
@@ -47,13 +49,29 @@ def run_ner_task(**kwargs):
 
             blobid = id_record[0]
             hdcpupdatedate = id_record[1]
+            note = get_resynthesized_note(blobid)
 
-            results = ner._call_flask_blob_nlp(blobid)
+            preprocessing_results = flask_blob_nlp.call_flask_blob_nlp_preprocessing(blobid, note)
+            sectionerx_results = flask_blob_nlp.call_flask_blob_nlp_sectionerx(blobid, note)
 
-            if results is None:
-                print("No NER results returned for id: {id}. Failing note and Continuing".format(id=blobid))
+            if preprocessing_results is None:
+                print("No NER preprocessing results returned for id: {id}. Failing note and Continuing".format(id=blobid))
                 _update_ner_run_details(run_id, blobid, hdcpupdatedate, state=job_states.NLP_NER_FAILED)
                 continue
+
+            if sectionerx_results is None:
+                print(
+                    "No NER sectionerx results returned for id: {id}. Failing note and Continuing".format(id=blobid))
+                _update_ner_run_details(run_id, blobid, hdcpupdatedate, state=job_states.NLP_NER_FAILED)
+                continue
+
+            results = {}
+            results['patient_pubid'] = note['patient_pubid']
+            results['service_date'] = note['service_date']
+            results['institution'] = note['institution']
+            results['note_type'] = note['note_type']
+            results['preprocessed_note'] = preprocessing_results
+            results['sectionerex_note'] = sectionerx_results
 
             batch_records[blobid] = results
 
