@@ -26,7 +26,7 @@ def generate_job_id(**kwargs):
     # get last update date from source since last successful run
     # then pull record id with new update date from source
     job_start_date = datetime.now().strftime(common.DT_FORMAT)[:-3]
-    datecreated = []
+    dateresynthesized = []
 
     blob_job_queue = _get_blobs_since_date(date=last_ner_update_date, state=job_states.JOB_COMPLETE)
 
@@ -35,12 +35,12 @@ def generate_job_id(**kwargs):
         exit()
     else:
         for row in blob_job_queue:
-            datecreated.append(row[1])
+            dateresynthesized.append(row[1])
             _insert_ner_scheduled(new_run_id, row[1], job_start_date)
 
-        print("{} new update batches found since last update date: {}".format(len(datecreated), last_ner_update_date))
+        print("{} new update batches found since last update date: {}".format(len(dateresynthesized), last_ner_update_date))
 
-    return new_run_id, datecreated
+    return new_run_id, dateresynthesized
 
 
 def _insert_ner_scheduled(run_id, update_date, job_start_date, **kwargs):
@@ -50,7 +50,7 @@ def _insert_ner_scheduled(run_id, update_date, job_start_date, **kwargs):
     :param update_date:  resynth_date from the af_resynthesis_runs_details table where resynth_status == complete
     """
     tgt_insert_stmt = "INSERT INTO af_ner_runs " \
-                      "(af_ner_runs_id, job_status, job_start, source_last_update_date) " \
+                      "(af_ner_runs_id, job_status, job_start, resynth_date) " \
                       "VALUES (%s, %s, %s, %s)"
     common.AIRFLOW_NLP_DB.run(tgt_insert_stmt,
                               parameters=(run_id, job_states.JOB_RUNNING, job_start_date, update_date))
@@ -78,9 +78,11 @@ def _get_last_ner_run_id(**kwargs):
 
 
 def _get_last_ner_update_date(**kwargs):
-    tgt_select_stmt = "SELECT max(source_last_update_date) FROM af_ner_runs WHERE job_status = %s"
+    tgt_select_stmt = "SELECT max(resynth_date) " \
+                      "FROM af_ner_runs " \
+                      "WHERE job_status = %s"
     last_ner_update_date = (common.AIRFLOW_NLP_DB.get_first(tgt_select_stmt,
-                                                            parameters=(job_states.JOB_COMPLETE,)) or (None,))
+                                                            parameters=(job_states.NLP_NER_COMPLETE,)) or (None,))
 
     return last_ner_update_date[0]
 

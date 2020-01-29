@@ -8,6 +8,7 @@ from airflow.hooks.mssql_hook import MsSqlHook
 from airflow.hooks.postgres_hook import PostgresHook
 from airflow.models import Variable
 from sci.store import swift, s3
+import utilities.job_states as job_states
 
 __error_db_stage_dict = {"PROD": PostgresHook(postgres_conn_id="prod-airflow-nlp-pipeline"),
                          "DEV": PostgresHook(postgres_conn_id="dev-airflow-nlp-pipeline")
@@ -165,8 +166,7 @@ def _log_failure(run_id, blobid, hdcpupdatedate, message, state, update_stmt):
                       time=time_of_error,
                       error_message=message)
     AIRFLOW_NLP_DB.run(update_stmt,
-                       parameters=(
-                           JOB_FAILURE, time_of_error, run_id, hdcpupdatedate, blobid), autocommit=True)
+                       parameters=(job_states.JOB_FAILURE, time_of_error, run_id, hdcpupdatedate, blobid), autocommit=True)
 
 
 def get_original_note_by_blobid(blobid):
@@ -240,30 +240,28 @@ def get_patient_data_from_source(patientId):
 
 def _get_most_recent_successful_note_job_update_date(blobid):
     select_stmt = ("SELECT MAX(HDCPUpdateDate)"
-                  " FROM af_resynthesis_runs_details"
-                  " WHERE HDCOrcaBlobID = %s AND resynth_status = %s")
+                   " FROM af_resynthesis_runs_details"
+                   " WHERE HDCOrcaBlobID = %s AND resynth_status = %s")
 
-    return AIRFLOW_NLP_DB.get_first(select_stmt, parameters=(blobid, JOB_COMPLETE))[0]
+    return AIRFLOW_NLP_DB.get_first(select_stmt, parameters=(blobid, job_states.JOB_COMPLETE))[0]
 
-def _get_most_recent_ner_completed_date(blobid):
-    select_stmt = ("SELECT MAX(job_start)"
-                  " FROM af_ner_runs"
-                  " WHERE HDCOrcaBlobID = %s AND job_status = %s")
-    AIRFLOW_NLP_DB.run(select_stmt,
-                       parameters=(blobid, JOB_RUNNING))
+def _get_most_recent_ner_start_date(**kwargs):
+    select_stmt = ("SELECT MAX(job_start) " \
+                   "FROM af_ner_runs " \
+                   "WHERE job_status = %s ")
+    most_recent_ner_start_date = (AIRFLOW_NLP_DB.run(select_stmt, parameters=(job_states.JOB_RUNNING,)) or (None,))
+    return most_recent_ner_start_date[0]
 
-    return
-
-def _get_file_update_date_on_storage(blobid):
+def _get_last_resynth_date_on_storage(**kwargs):
     """
     get all the blobs and update date from swift
     return {'blob filename': 'last modified date', ...}
     """
-    select_stmt = ("SELECT MAX(resynth_date)"
-                  " FROM af_resynthesis_runs_details"
-                  " WHERE HDCOrcaBlobID = %s AND resynth_status = %s")
-
-    return AIRFLOW_NLP_DB.get_first(select_stmt, parameters=(blobid, JOB_COMPLETE))[0]
+    select_stmt = ("SELECT MAX(resynth_date) " \
+                   "FROM af_resynthesis_runs_details " \
+                   "WHERE resynth_status = %s ")
+    last_resynth_date_on_storage = (AIRFLOW_NLP_DB.get_first(select_stmt, parameters=(job_states.JOB_COMPLETE,)) or (None,))
+    return last_resynth_date_on_storage[0]
 
 def write_to_storage(blobid, update_date, payload, key, connection):
     """
@@ -292,8 +290,8 @@ def read_from_storage(blobid, connection):
     create appropriate storage hook, upload json object to the object store (swift or s3)
     :param key: file name shown on swift or s3, named by blobid
     """
-    job_date = _get_most_recent_ner_completed_date(blobid)
-    update_date = _get_file_update_date_on_storage(blobid)
+    job_date = _get_most_recent_ner_start_date()
+    update_date = _get_last_resynth_date_on_storage()
 
     print("blobId: {} was updated on {}, after last NER task ran on {}".format(
         blobid, update_date, job_date))

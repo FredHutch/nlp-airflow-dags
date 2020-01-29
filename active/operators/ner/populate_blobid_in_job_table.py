@@ -24,7 +24,7 @@ def populate_blobid_in_job_table(**kwargs):
     complete_jobs = {(row[0], row[1]): row[2] for row in complete_job_rows}
 
     tgt_insert_stmt = "INSERT INTO af_ner_runs_details " \
-                      "(af_ner_runs_id, hdcpupdatedate, hdcorcablobid, annotation_creation_date, ner_status, ner_date) " \
+                      "(af_ner_runs_id, hdcpupdatedate, hdcorcablobid, resynth_date, ner_status, ner_date) " \
                       "VALUES (%s, %s, %s, %s, %s, %s) "
 
     for creation_date in datecreated:
