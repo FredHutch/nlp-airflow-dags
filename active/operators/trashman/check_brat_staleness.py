@@ -62,21 +62,22 @@ def parse_remote_output(remote_command_output):
         modified_date, path = split_string[0], split_string[1]
         files = {'File': path, 
                      'ModifiedDate': datetime.strptime(modified_date, '%Y-%m-%d'), 
-                     'ElapsedTime': current_date - datetime.strptime(modified_date, '%Y-%m-%d')}
+                     'ElapsedTime': current_date - datetime.strptime(modified_date, '%Y-%m-%d')
+                     }
         brat_files.append(files)
     return brat_files
 
 def compare_dates(brat_files):
     """
+    Compares dates with predefined airflow threshold (days)
     """
     for file in brat_files:
         if file['ElapsedTime'] < STALE_THRESHOLD:
             #flag as a stale
-            file.update({'Stale': 1})
+            file.update({'IsStale': 1})
         else:
-            file.update({'Stale': 0})
-
-    return None
+            file.update({'IsStale': 0})
+    return brat_files
 
 def write_run_details(brat_files):
     """
@@ -85,24 +86,24 @@ def write_run_details(brat_files):
     Returns:
     """
     tgt_insert_stmt = ("""INSERT INTO trashman_runs_details (af_trashman_runs_id, brat_capacity, stale_count, non_stale_count, stale_check_date) VALUES (%s, %s, %s, %s, %s)""")
+    brat_capacity = len(brat_files)
     #get count of stale v. nonstale in current run
-
+    stale_count = 
+    non_stale_count = 
+    stale_check_date = 
     #write job_id, count of stale vs nonstale to db, and threshold parameter
+
     pass
 
 
 def notify_email(context, **kwargs):
     """
     Sends a notification email to the service account for bookkeeping.
-
+    TODO: Redo tests on 
     Args:
         context: a dict containing
     Returns:
     """
-    if(task_instance.xcom_pull(task_ids=None, dag_id=dag_id, key=dag_id) == True):
-        logging.info("Other failing task has been notified.")
     send_email = EmailOperator()
-
     title = ("Trashman Report: Stale Files in Brat for {trashman_run}".format(trashman_run=str(datetime.now()))
     body = json.dumps(context)
-    send_email()
