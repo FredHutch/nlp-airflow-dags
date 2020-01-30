@@ -3,7 +3,6 @@ from datetime import datetime, timedelta
 import active.utilities.job_states as job_states
 import active.utilities.common as common
 
-
 def check_brat_modification_date(**kwargs):
     """
     Checks contents in brat for staleness.
@@ -12,20 +11,22 @@ def check_brat_modification_date(**kwargs):
 
     #TODO: Generate a job_id and pair with staleness check from DB.
 
-    job_start_date = datetime.now()
+    job_start_date = datetime.now() #this should go in the job generation instead maybe?
     datefolder = kwargs['datefolder']
-    remote_nlp_home_path = "/mnt/encrypted/brat-v1.3_Crunchy_Frog/data/nlp"
+    #new_run_id = generate_job_id()
     ssh_hook = SSHHook(ssh_conn_id="prod-brat")
+    remote_nlp_home_path = "/mnt/encrypted/brat-v1.3_Crunchy_Frog/data/nlp"
     #list all the files ending with ann and find the modified dates
     remote_command = """find {dir} -type f -name \*.ann -printf '%TY-%Tm-%Td:%TT\t%p\n'""".format(dir=remote_nlp_home_path) 
     #output of check_output is in bytes
     output = subprocess.check_output(["ssh", "-o StrictHostKeyChecking=no", "-p {}".format(ssh_hook.port),
                  "{}@{}".format(ssh_hook.username, ssh_hook.remote_host), remote_command])
+    check_date = datetime.now()
     #converte bytes to str/datetime datatypes
     parsed_output  = parse_remote_output(output)
-    time_dict = compare_dates(parsed_find_output)
-    write_run_details(time_dict)
-    return new_run_id, job_start_date
+    brat_files = compare_dates(parsed_find_output)
+    write_run_details(new_run_id, check_date, brat_files)
+    return new_run_id, job_start_date, check_date
 
 
 def parse_remote_output(remote_command_output):
@@ -47,10 +48,11 @@ def parse_remote_output(remote_command_output):
     for line in decoded.splitlines():
         split_string = line.split('\t')
         modified_date, path = split_string[0], split_string[1]
-        files = {'File': path, 
-                     'ModifiedDate': datetime.strptime(modified_date, '%Y-%m-%d'), 
-                     'ElapsedTime': current_date - datetime.strptime(modified_date, '%Y-%m-%d')
-                     }
+        files = {
+                 'File': path, 
+                 'ModifiedDate': datetime.strptime(modified_date, '%Y-%m-%d'), 
+                 'ElapsedTime': current_date - datetime.strptime(modified_date, '%Y-%m-%d')
+                }
         brat_files.append(files)
     return brat_files
 
@@ -66,28 +68,34 @@ def compare_dates(brat_files):
             file.update({'IsStale': 0})
     return brat_files
 
-def write_run_details(run_id, brat_files, threshold=STALE_THRESHOLD):
+def get_stale_count(brat_files):
+    """
+    Calculates number of stale files
+    """
+    stale_count = 0
+    for file in brat_files:
+        count += file['IsStale']
+    return stale_count
+
+def write_run_details(run_id, check_date, brat_files, threshold=STALE_THRESHOLD):
     """
     Writes run statistics on stale v. nonstale files in brat. Used to track modification over time.
     param: brat_files: list of dicts containing File, ModifiedDate, ElapsedTime, and IsStale
     """
-    tgt_insert_stmt = ("""INSERT INTO trashman_runs_details (af_trashman_runs_id, brat_capacity, stale_count, non_stale_count, stale_check_date) VALUES (%s, %s, %s, %s, %s)""")
+    tgt_insert_stmt = ("INSERT INTO af_trashman_runs_details"\
+                       "(af_trashman_runs_id, brat_capacity, stale_count, non_stale_count, stale_threshold, stale_check_date)"\
+                       "VALUES (%s, %s, %s, %s, %s, %s)")
     brat_capacity = len(brat_files)
     #get count of stale v. nonstale in current run
-    stale_count = 
-    non_stale_count = 
-    stale_check_date = 
+    stale_count = get_stale_count(brat_files)
+    non_stale_count = stale_count - brat_capacity
     #write job_id, count of stale vs nonstale to db, and threshold parameter
-    pass
-
+    common.NLP_DB.run(tgt_insert_stmt, parameters=(run_id, brat_capacity, stale_count, non_stale_count, threshold, str(check_date)))
 
 def notify_email(context, **kwargs):
     """
-    Sends a notification email to the service account for bookkeeping.
-    TODO: Redo tests on 
-    Args:
-        context: a dict containing
-    Returns:
+    Sends a notification email to the service account.
+    TODO: Redo tests on email operator
     """
     alert = EmailOperator(
         task_id=alertTaskID,
