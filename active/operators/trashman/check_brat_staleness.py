@@ -2,26 +2,15 @@ import json
 from datetime import datetime, timedelta
 import active.utilities.job_states as job_states
 import active.utilities.common as common
-"""
-TODO:
-
-"""
-
-alert = EmailOperator(
-    task_id=alertTaskID,
-    #for testing purposes
-    to='ritche.long@fredhutch.org',
-    subject='Stale Annotations Report',
-    html_content='test',
-    dag=dag
-)
-
 
 
 def check_brat_modification_date(**kwargs):
     """
     Checks contents in brat for staleness.
+    TODO: Generate a job_id and pair with staleness check.
+
     """
+
     job_start_date = datetime.now()
     datefolder = kwargs['datefolder']
     remote_nlp_home_path = "/mnt/encrypted/brat-v1.3_Crunchy_Frog/data/nlp"
@@ -31,12 +20,10 @@ def check_brat_modification_date(**kwargs):
     #output of check_output is in bytes
     output = subprocess.check_output(["ssh", "-o StrictHostKeyChecking=no", "-p {}".format(ssh_hook.port),
                  "{}@{}".format(ssh_hook.username, ssh_hook.remote_host), remote_command])
-    
     #converte bytes to str/datetime datatypes
     parsed_output  = parse_remote_output(output)
     time_dict = compare_dates(parsed_find_output)
     write_run_details(time_dict)
-
     return new_run_id, job_start_date
 
 
@@ -44,12 +31,11 @@ def parse_remote_output(remote_command_output):
     """
     Checks contents in brat for staleness.
 
-    param:
-
+    param: remote_command_output - UTF-8 encoded output from a subprocess call
 
     Returns:
-
-        brat_files: list of dictionaries containing ModifiedDates and the absolute path + filename
+        brat_files: list of dictionaries containing ModifiedDates and the absolute path +
+        and number of days elapsed from today
     """
 
     #decode subprocess output from bytes to str
@@ -82,8 +68,7 @@ def compare_dates(brat_files):
 def write_run_details(brat_files):
     """
     Writes run statistics on stale v. nonstale files in brat. Used to track modification over time.
-    Args:
-    Returns:
+    param: brat_files: list of dicts containing File, ModifiedDate, ElapsedTime, and IsStale
     """
     tgt_insert_stmt = ("""INSERT INTO trashman_runs_details (af_trashman_runs_id, brat_capacity, stale_count, non_stale_count, stale_check_date) VALUES (%s, %s, %s, %s, %s)""")
     brat_capacity = len(brat_files)
@@ -92,7 +77,6 @@ def write_run_details(brat_files):
     non_stale_count = 
     stale_check_date = 
     #write job_id, count of stale vs nonstale to db, and threshold parameter
-
     pass
 
 
@@ -104,6 +88,13 @@ def notify_email(context, **kwargs):
         context: a dict containing
     Returns:
     """
-    send_email = EmailOperator()
+    alert = EmailOperator(
+        task_id=alertTaskID,
+        #for testing purposes
+        to='ritche.long@fredhutch.org',
+        subject='Stale Annotations Report',
+        html_content='test',
+        dag=dag
+    )
     title = ("Trashman Report: Stale Files in Brat for {trashman_run}".format(trashman_run=str(datetime.now()))
     body = json.dumps(context)
