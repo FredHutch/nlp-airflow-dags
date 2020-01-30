@@ -33,28 +33,33 @@ def generate_job_id(**kwargs):
         # first run
         update_date_from_last_run = datetime(1970, 1, 1).strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
     tgt_select_stmt = "SELECT max(af_runs_id) FROM af_runs"
-    last_run_id = common.AIRFLOW_NLP_DB.get_first(tgt_select_stmt)[0]
-
-    if last_run_id is None:
-        new_run_id = 1
-    else:
-        new_run_id = last_run_id + 1
+    last_run_id = (common.AIRFLOW_NLP_DB.get_first(tgt_select_stmt)[0] or 0)
+    new_run_id = last_run_id + 1
 
     # get last update date from source since last successful run
     # then pull record id with new update date from source
-    src_select_stmt = "SELECT HDCPUpdateDate, count(*) " \
-                      "FROM orca_ce_blob " \
-                      "WHERE HDCPUpdateDate >= %s " \
-                      "GROUP BY HDCPUpdateDate"
-    tgt_insert_stmt = "INSERT INTO af_runs " \
-                      "(af_runs_id, source_last_update_date, record_counts, job_start, job_status) " \
-                      "VALUES (%s, %s, %s, %s, %s)"
+    src_select_stmt = ("SELECT HDCPUpdateDate, count(*) " 
+                      "FROM vClinicalNoteDiscovery " 
+                      "WHERE HDCPUpdateDate >= %s "
+                      "GROUP BY HDCPUpdateDate")
+    tgt_insert_stmt = ("INSERT INTO af_runs "
+                      "(af_runs_id, source_last_update_date, record_counts, job_start, job_status) "
+                      "VALUES (%s, %s, %s, %s, %s)")
 
     job_start_date = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
     hdcpupdatedates = []
+    total_job_count = common.MAX_BATCH_SIZE
     for row in common.SOURCE_NOTE_DB.get_records(src_select_stmt, parameters=(update_date_from_last_run,)):
         hdcpupdatedates.append(row[0])
         common.AIRFLOW_NLP_DB.run(tgt_insert_stmt, parameters=(new_run_id, row[0], row[1], job_start_date, JOB_RUNNING))
+        print("Job Batch for hdcpupdatedate: {}  contains {} notes."
+              " {} total notes scheduled".format(row[0], row[1], (common.MAX_BATCH_SIZE - total_job_count)))
+        total_job_count -= row[1]
+        if total_job_count <= 0:
+            print("Job Batch for hdcpupdatedate: {}  contains {} notes"
+                  " and exceeds cumulative total per-run Job Size of {}."
+                  " Breaking early.".format(row[0], row[1], common.MAX_BATCH_SIZE))
+            break
 
     if len(hdcpupdatedates) == 0:
         print("No new records found since last update date: {}".format(update_date_from_last_run))
@@ -68,24 +73,33 @@ def populate_blobid_in_job_table(**kwargs):
     (run_id, hdcpupdatedates) = kwargs['ti'].xcom_pull(task_ids='generate_job_id')
 
     # get record id to be processed
-    src_select_stmt = "SELECT DISTINCT TOP 3 hdcorcablobid FROM orca_ce_blob WHERE hdcpupdatedate = %s"
+    src_select_stmt = "SELECT DISTINCT HDCOrcaBlobId FROM vClinicalNoteDiscovery WHERE HDCPUpdateDate = %s"
     # get completed jobs so that we do not repeat completed work
-    screen_complete_stmt = "SELECT hdcorcablobid, hdcpupdatedate, annotation_date from af_runs_details  " \
-                           "WHERE annotation_status = %s"
+    screen_complete_stmt = ("SELECT HDCOrcaBlobId, HDCPUpdateDate, annotation_date from af_runs_details  "
+                           "WHERE annotation_status = %s")
     complete_job_rows = common.AIRFLOW_NLP_DB.get_records(screen_complete_stmt, parameters=(JOB_COMPLETE,))
     complete_jobs = {(row[0], row[1]): row[2] for row in complete_job_rows}
 
-    tgt_insert_stmt = "INSERT INTO af_runs_details (af_runs_id, hdcpupdatedate, hdcorcablobid, annotation_status) " \
-                      "VALUES (%s, %s, %s, %s)"
+    tgt_insert_stmt = ("INSERT INTO af_runs_details (af_runs_id, HDCPUpdateDate, HDCOrcaBlobId, annotation_status) "
+                      "VALUES (%s, %s, %s, %s)")
 
+    total_job_count = common.MAX_BATCH_SIZE
     for hdcpupdatedate in hdcpupdatedates:
         for row in common.SOURCE_NOTE_DB.get_records(src_select_stmt, parameters=(hdcpupdatedate,)):
-            print("checking ID: {}".format(row[0]))
+            print("checking ID: {} for previous completion.".format(row[0]))
             if (row[0], hdcpupdatedate) in complete_jobs.keys():
                 print("Job for note {},{} has already been completed on {} . "
                       "Skipping.".format(row[0], hdcpupdatedate, complete_jobs[(row[0], hdcpupdatedate)]))
                 continue
+
             common.AIRFLOW_NLP_DB.run(tgt_insert_stmt, parameters=(run_id, hdcpupdatedate, row[0], JOB_RUNNING))
+            total_job_count -= 1
+            if total_job_count == 0:
+                print("Job Batch for hdcpupdatedate: {}  contains {} notes"
+                      " and exceeds cumulative total per-run Job Size of {}."
+                      " Breaking early.".format(row[0], row[1], common.MAX_BATCH_SIZE))
+                break
+
 
 
 def send_notes_to_brat(**kwargs):
@@ -163,7 +177,7 @@ def send_notes_to_brat(**kwargs):
 def update_brat_db_status(note_id, hdcpupdatedate, directory_location):
     tgt_insert_stmt = """
          INSERT INTO brat_review_status 
-         (hdcorcablobid, last_update_date, directory_location, job_start, job_status, hdcpupdatedate)
+         (HDCOrcaBlobId, last_update_date, directory_location, job_start, job_status, HDCPUpdateDate)
          VALUES (%s, %s, %s, %s, %s, %s)
          """
 
@@ -174,11 +188,13 @@ def update_brat_db_status(note_id, hdcpupdatedate, directory_location):
 
 
 def save_note_to_temp_storage(blobid, hdcpupdatedate, metadata_dict):
-    insert_stmt = "INSERT INTO temp_notes " \
-                  "(hdcorcablobid, hdcpupdatedate, clinical_event_id, person_id, " \
-                  "blob_contents, service_dt_time, institution, event_class_cd_descr) " \
-                  "VALUES (%s, %s, %s, %s, %s, %s, %s, %s)"
-    print("saving metadata to temp storage for {}, {}: {}".format(blobid, hdcpupdatedate, metadata_dict))
+
+    insert_stmt = ("INSERT INTO TEMP_NOTES (HDCOrcaBlobID, HDCPUpdateDate,"
+                   "CLINICAL_EVENT_ID, HDCPersonId, BLOB_CONTENTS,"
+                   "SERVICE_DT_TM, INSTITUTION, EVENT_CD_DESCR) "
+                   "VALUES (%s, %s, %s, %s, %s, %s, %s, %s)")
+    print("saving metadata to temp storage for {}, {}".format(blobid, hdcpupdatedate))
+
     common.ANNOTATIONS_DB.run(insert_stmt, parameters=(blobid,
                                                        hdcpupdatedate,
                                                        metadata_dict["clinical_event_id"],
@@ -190,9 +206,9 @@ def save_note_to_temp_storage(blobid, hdcpupdatedate, metadata_dict):
 
 
 def save_person_info_to_temp_storage(blobid, hdcpupdatedate, patient_data):
-    insert_stmt = "INSERT INTO temp_person " \
-                  "(hdcorcablobid, hdcpupdatedate, person_id, GivenName, MiddleName, FamilyName) " \
-                  "VALUES (%s, %s, %s, %s, %s, %s)"
+    insert_stmt = ("INSERT INTO TEMP_PERSON "
+                  "(HDCOrcaBlobId, HDCPUpdateDate, HDCPersonId, FirstName, MiddleName, LastName) "
+                  "VALUES (%s, %s, %s, %s, %s, %s)")
     print("saving person info to temp storage for {}, {}: {}".format(blobid, hdcpupdatedate, patient_data[0]))
     common.ANNOTATIONS_DB.run(insert_stmt, parameters=(blobid,
                                                        hdcpupdatedate,
@@ -206,12 +222,12 @@ def annotate_clinical_notes(**kwargs):
     api_hook = HttpHook(http_conn_id='fh-nlp-api-deid', method='POST')
     # get last update date
     (run_id, hdcpupdatedates) = kwargs['ti'].xcom_pull(task_ids='generate_job_id')
-    tgt_select_stmt = "SELECT hdcorcablobid " \
-                      "FROM af_runs_details " \
-                      "WHERE af_runs_id = %s and hdcpupdatedate = %s and annotation_status = %s"
-    tgt_update_stmt = "UPDATE af_runs_details " \
-                      "SET annotation_status = %s, annotation_date = %s " \
-                      "WHERE af_runs_id = %s and hdcpupdatedate = %s and hdcorcablobid in (%s)"
+    tgt_select_stmt = ("SELECT HDCOrcaBlobId "
+                      "FROM af_runs_details "
+                      "WHERE af_runs_id = %s and HDCPUpdateDate = %s and annotation_status = %s")
+    tgt_update_stmt = ("UPDATE af_runs_details "
+                      "SET annotation_status = %s, annotation_date = %s "
+                      "WHERE af_runs_id = %s and HDCPUpdateDate = %s and HDCOrcaBlobId in (%s)")
 
     for hdcpupdatedate in hdcpupdatedates:
         batch_records = {}
@@ -222,7 +238,7 @@ def annotate_clinical_notes(**kwargs):
             patient_data = common.get_patient_data_from_source(note_metadata["patient_id"])
 
             if note_metadata["patient_id"] is None or patient_data is None:
-                message = "Exception occurred: No PatientID found for blobid, hdcpupdatedate: {id},{date}".format(
+                message = "Exception occurred: No PatientID found for BlobId, HDCPUpdateDate: {id},{date}".format(
                     id=blobid, date=hdcpupdatedate)
                 common.log_error_and_failure_for_deid_note_job(run_id,
                                                                blobid,
@@ -240,7 +256,6 @@ def annotate_clinical_notes(**kwargs):
             try:
                 resp = api_hook.run("/deid/annotate", data=json.dumps(record['original_note']),
                                     headers={"Content-Type": "application/json"})
-                print("API response: {}".format(resp.content))
                 record['annotated_note'] = json.loads(resp.content)
                 annotation_status = JOB_COMPLETE
                 batch_records[blobid] = record
