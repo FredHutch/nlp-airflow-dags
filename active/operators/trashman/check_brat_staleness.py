@@ -7,9 +7,10 @@ import active.utilities.common as common
 def check_brat_modification_date(**kwargs):
     """
     Checks contents in brat for staleness.
-    TODO: Generate a job_id and pair with staleness check.
 
     """
+
+    #TODO: Generate a job_id and pair with staleness check from DB.
 
     job_start_date = datetime.now()
     datefolder = kwargs['datefolder']
@@ -65,7 +66,7 @@ def compare_dates(brat_files):
             file.update({'IsStale': 0})
     return brat_files
 
-def write_run_details(brat_files):
+def write_run_details(run_id, brat_files, threshold=STALE_THRESHOLD):
     """
     Writes run statistics on stale v. nonstale files in brat. Used to track modification over time.
     param: brat_files: list of dicts containing File, ModifiedDate, ElapsedTime, and IsStale
