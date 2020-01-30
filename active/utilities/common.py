@@ -72,18 +72,10 @@ REVIEW_BYPASSED_ANNOTATION_TYPE = 'REVIEW BYPASSED'
 DEID_ANNOTATION_TYPE = 'DEID ANNOTATIONS'
 RESYNTH_ANNOTATION_TYPE = 'RESYNTHESIZED ANNOTATIONS'
 
-## To-do
-## due to
-container_name = 'NLP'
-swift_conn = swiftclient.Connection(
-    user=os.getenv('OS_TENANT_NAME'),
-    key=os.getenv('OS_AUTH_TOKEN'),
-    authurl=os.getenv("OS_AUTH_URL"),
-)
 #the default 'beginning time' for any date-based choosing strategies
 DT_FORMAT = "%Y-%m-%d %H:%M:%S.%f"
 EPOCH = Variable.get("EPOCH", datetime(1970, 1, 1).strftime(DT_FORMAT)[:-3])
-STALE_THRESHOLD = Variable.get("STALE_THRESHOLD")
+
 # to-do
 # add api_hook to airflow
 flasknlobnlp_api_hook = HttpHook(http_conn_id='fh-nlp-api-flask-blob-nlp', method='POST')
