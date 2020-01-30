@@ -107,3 +107,4 @@ def notify_email(context, **kwargs):
     )
     title = ("Trashman Report: Stale Files in Brat for {trashman_run}".format(trashman_run=str(datetime.now()))
     body = json.dumps(context)
+    #execute email
