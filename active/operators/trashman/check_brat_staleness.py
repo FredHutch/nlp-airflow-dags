@@ -61,7 +61,7 @@ def compare_dates(brat_files):
     Compares dates with predefined airflow threshold (days)
     """
     for file in brat_files:
-        if file['ElapsedTime'] < STALE_THRESHOLD:
+        if file['ElapsedTime'] > STALE_THRESHOLD:
             #flag as a stale
             file.update({'IsStale': 1})
         else:
