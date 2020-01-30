@@ -2,6 +2,9 @@ import json
 from datetime import datetime, timedelta
 import active.utilities.job_states as job_states
 import active.utilities.common as common
+from airflow.models import Variable
+
+STALE_THRESHOLD = Variable.get("STALE_THRESHOLD")
 
 def check_brat_modification_date(**kwargs):
     """
