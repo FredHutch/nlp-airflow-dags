@@ -27,9 +27,7 @@ def populate_blobid_in_job_table(**kwargs):
                       "(af_ner_runs_id, hdcpupdatedate, hdcorcablobid, resynth_date, ner_status, ner_date) " \
                       "VALUES (%s, %s, %s, %s, %s, %s) "
 
-    blob_ids = []
-    hdcpupdatedates = []
-    matched_resynthdates = []
+    jobs_list = []
     for resynthdate in resynthdates:
         print('resynth_date: ', resynthdate)
         for row in common.AIRFLOW_NLP_DB.get_records(src_select_stmt, parameters=(resynthdate, job_states.JOB_COMPLETE,)):
@@ -45,8 +43,6 @@ def populate_blobid_in_job_table(**kwargs):
             common.AIRFLOW_NLP_DB.run(tgt_insert_stmt, parameters=(run_id, hdcpupdatedate, blob_id,
                                                                    resynthdate, job_states.JOB_RUNNING,
                                                                    datetime.now().strftime(common.DT_FORMAT)[:-3]))
-            matched_resynthdates.append(resynthdate)
-            blob_ids.append(blob_id)
-            hdcpupdatedates.append(hdcpupdatedate)
+            jobs_list.append((run_id, resynthdate, blob_id, hdcpupdatedate))
 
-    return run_id, matched_resynthdates, blob_ids, hdcpupdatedates
+    return jobs_list

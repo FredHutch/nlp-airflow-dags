@@ -30,12 +30,22 @@ __storage_dict = {'SWIFT':
                      "DEV": 'fh-nlp-deid-s3'}
                  }
 __bucket_dict = {'SWIFT':
-                  {"PROD": "NLP/fh-nlp-deid-swift",
-                   "DEV": "NLP/fh-nlp-deid-swift-dev"},
+                  {"PROD": "NLP",
+                   "DEV": "NLP"},
                 'S3':
                     {"PROD": 'fh-nlp-deid',
                      "DEV": 'fh-nlp-deid'}
                 }
+
+__annotations_prefix_dict = {
+    'SWIFT':
+        {"PROD": "fh-nlp-deid-swift/annotated_note",
+         "DEV": "fh-nlp-deid-swift-dev/annotated_note"},
+    'S3':
+        {"PROD": 'fh-nlp-deid',
+         "DEV": 'fh-nlp-deid'}
+}
+
 __storage_writer = {'SWIFT':swift,
                     'S3':s3}
 
@@ -58,6 +68,7 @@ ANNOTATIONS_DB = __annotations_db_stage_dict[STAGE]
 
 OBJ_STORE = __storage_dict[STORAGE][STAGE]
 BUCKET_NAME = __bucket_dict[STORAGE][STAGE]
+ANNOTATION_PREFIX = __annotations_prefix_dict[STORAGE][STAGE]
 
 JOB_RUNNING = 'scheduled'
 JOB_COMPLETE = 'completed'
@@ -285,7 +296,7 @@ def write_to_storage(blobid, update_date, payload, key, connection):
                                        job_date)
 
 
-def read_from_storage(blobid, connection):
+def read_from_storage(blobid, connection, blob_prefix=ANNOTATION_PREFIX):
     """
     create appropriate storage hook, upload json object to the object store (swift or s3)
     :param key: file name shown on swift or s3, named by blobid
@@ -297,4 +308,8 @@ def read_from_storage(blobid, connection):
         blobid, update_date, job_date))
 
     if job_date is None or job_date <= update_date:
-        return connection.object_get_json('deid_test/annotated_note/{id}.json'.format(id=blobid))
+        return connection.object_get_json(get_default_keyname(blobid, prefix=blob_prefix))
+
+
+def get_default_keyname(blobid, prefix=ANNOTATION_PREFIX):
+    return '{prefix}/{id}.json'.format(prefix=prefix, id=blobid)

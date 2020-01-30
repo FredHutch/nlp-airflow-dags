@@ -4,14 +4,15 @@ from datetime import datetime
 import utilities.common as common
 import utilities.job_states as job_states
 
-import operators.utilities.flask_blob_nlp as flask_blob_nlp
+import utilities.flask_blob_nlp as flask_blob_nlp
 
 
 def run_ner_task(**kwargs):
     # get last update date
-    (run_id, resynthdates, blobids, hdcpupdatedates) = kwargs['ti'].xcom_pull(task_ids='generate_job_id')
-    job_tuple = (resynthdates, blobids, hdcpupdatedates)
-    for resynth_date, blobid, hdcpupdatedate in job_tuple:
+    (jobs_list) = kwargs['ti'].xcom_pull(task_ids='populate_blobid_in_job_table')
+    print("job tuple: {}".format(jobs_list))
+    print("job_tuple indices: {}".format(len(jobs_list)))
+    for run_id, resynth_date, blobid, hdcpupdatedate in jobs_list:
         # record number of NER tasks
         record_processed = 0
 
@@ -45,7 +46,7 @@ def run_ner_task(**kwargs):
             common.write_to_storage(blobid,
                                     hdcpupdatedate,
                                     payload=json_obj_to_store,
-                                    key='deid_test/NER_blobs/{id}.json'.format(id=blobid),
+                                    key=common.get_default_keyname(blobid),
                                     connection=common.MYSTOR)
             _update_ner_run_details(run_id, blobid, hdcpupdatedate, state=job_states.NLP_NER_COMPLETE)
             _update_ner_runs(run_id, state=job_states.NLP_NER_COMPLETE)
