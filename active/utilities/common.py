@@ -65,6 +65,7 @@ ERROR_DB = __error_db_stage_dict[STAGE]
 SOURCE_NOTE_DB = __source_note_db_stage_dict[STAGE]
 AIRFLOW_NLP_DB = __airflow_nlp_db_stage_dict[STAGE]
 ANNOTATIONS_DB = __annotations_db_stage_dict[STAGE]
+FLASK_BLOB_NLP_API_HOOK = HttpHook(http_conn_id='fh-nlp-api-flask-blob-nlp', method='POST')
 
 OBJ_STORE = __storage_dict[STORAGE][STAGE]
 BUCKET_NAME = __bucket_dict[STORAGE][STAGE]
@@ -87,9 +88,6 @@ RESYNTH_ANNOTATION_TYPE = 'RESYNTHESIZED ANNOTATIONS'
 DT_FORMAT = "%Y-%m-%d %H:%M:%S.%f"
 EPOCH = Variable.get("EPOCH", datetime(1970, 1, 1).strftime(DT_FORMAT)[:-3])
 
-# to-do
-# add api_hook to airflow
-flasknlobnlp_api_hook = HttpHook(http_conn_id='fh-nlp-api-flask-blob-nlp', method='POST')
 
 class OutOfDateAnnotationException(Exception):
     def __init__(self, message, blobid, blob_date, compared_date):
