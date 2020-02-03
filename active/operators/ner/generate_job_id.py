@@ -26,7 +26,7 @@ def generate_job_id(**kwargs):
     # get last update date from source since last successful run
     # then pull record id with new update date from source
     job_start_date = datetime.now().strftime(common.DT_FORMAT)[:-3]
-    dateresynthesized = []
+    resynthdates = []
 
     blob_job_queue = _get_blobs_since_date(date=last_ner_update_date, state=job_states.JOB_COMPLETE)
 
@@ -35,12 +35,12 @@ def generate_job_id(**kwargs):
         exit()
     else:
         for row in blob_job_queue:
-            dateresynthesized.append(row[1])
+            resynthdates.append(row[1])
             _insert_ner_scheduled(new_run_id, row[1], job_start_date)
 
-        print("{} new update batches found since last update date: {}".format(len(dateresynthesized), last_ner_update_date))
+        print("{} new update batches found since last update date: {}".format(len(resynthdates), last_ner_update_date))
 
-    return new_run_id, dateresynthesized
+    return new_run_id, resynthdates
 
 
 def _insert_ner_scheduled(run_id, update_date, job_start_date, **kwargs):

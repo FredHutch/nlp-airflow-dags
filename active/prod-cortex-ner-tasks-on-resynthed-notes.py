@@ -2,7 +2,7 @@ from datetime import datetime, timedelta
 
 from airflow.operators.python_operator import PythonOperator
 from airflow.models import DAG
-from operators.ner import generate_job_id, populate_blobid_in_job_table, run_ner_tasks_and_save_to_source_operator
+from operators.ner import generate_job_id, populate_blobid_in_job_table, run_ner_task
 
 DAG_NAME = 'prod-cortex-ner-tasks-on-resynthed-notes'
 CHILD_DAG_NAME = 'populate_blobid_in_job_table'
@@ -22,7 +22,7 @@ dag = DAG(dag_id=DAG_NAME,
 generate_job_id = \
     PythonOperator(task_id='generate_job_id',
                    provide_context=True,
-                   python_callable=generate_job_id.generate_job_id,
+                   python_callable=generate_job_id,
                    dag=dag)
 
 
@@ -30,13 +30,13 @@ generate_job_id = \
 populate_blobid_in_job_table_operator = \
     PythonOperator(task_id='populate_blobid_in_job_table',
                    provide_context=True,
-                   python_callable=populate_blobid_in_job_table.populate_blobid_in_job_table,
+                   python_callable=populate_blobid_in_job_table,
                    dag=dag)
 
 run_ner_tasks_and_save_to_source = \
     PythonOperator(task_id='run_ner_tasks_and_save_to_source',
                    provide_context=True,
-                   python_callable=run_ner_tasks_and_save_to_source_operator.run_ner_task,
+                   python_callable=run_ner_task,
                    dag=dag)
 
 

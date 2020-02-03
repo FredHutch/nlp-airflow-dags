@@ -3,48 +3,63 @@ from datetime import datetime
 
 import utilities.common as common
 import utilities.job_states as job_states
-from operators.ner import ner
+
+import utilities.flask_blob_nlp as flask_blob_nlp
 
 
 def run_ner_task(**kwargs):
     # get last update date
-    (run_id, resynthdate) = kwargs['ti'].xcom_pull(task_ids='generate_job_id')
-
-    for resynth_date in resynthdate:
+    (jobs_list) = kwargs['ti'].xcom_pull(task_ids='populate_blobid_in_job_table')
+    print("job tuple: {}".format(jobs_list))
+    print("job_tuple indices: {}".format(len(jobs_list)))
+    for run_id, resynth_date, blobid, hdcpupdatedate in jobs_list:
         # record number of NER tasks
         record_processed = 0
 
-        for id_record in _get_ner_run_details_id_by_resynth_date(run_id, resynth_date):
+        note = common.read_from_storage(blobid, connection=common.MYSTOR)
+        preprocessing_results = flask_blob_nlp.call_flask_blob_nlp_preprocessing(blobid, hdcpupdatedate, note)
+        sectionerx_results = flask_blob_nlp.call_flask_blob_nlp_sectionerx(blobid, hdcpupdatedate, note)
 
-            batch_records = {}
+        if preprocessing_results is None:
+            print("No NER preprocessing results returned for id: {id}. Failing note and Continuing".format(id=blobid))
+            _update_ner_run_details(run_id, blobid, hdcpupdatedate, state=job_states.NLP_NER_FAILED)
+            continue
 
-            blobid = id_record[0]
-            hdcpupdatedate = id_record[1]
+        if sectionerx_results is None:
+            print(
+                "No NER sectionerx results returned for id: {id}. Failing note and Continuing".format(id=blobid))
+            _update_ner_run_details(run_id, blobid, hdcpupdatedate, state=job_states.NLP_NER_FAILED)
+            continue
 
-            try:
-                results = ner._call_flask_blob_nlp(blobid)
-                batch_records[blobid] = results
+        results = {}
+        results['patient_pubid'] = note['patient_pubid']
+        results['service_date'] = note['service_date']
+        results['institution'] = note['institution']
+        results['note_type'] = note['note_type']
+        results['preprocessed_note'] = preprocessing_results
+        results['sectionerex_note'] = sectionerx_results
 
-                # save json to db
-                json_obj_to_store = json.dumps(results, indent=4, sort_keys=True)
-                # save annotated notes to object store
-                common.write_to_storage(blobid,
-                                        hdcpupdatedate,
-                                        payload=json_obj_to_store,
-                                        key='deid_test/NER_blobs/{id}.json'.format(id=blobid),
-                                        connection=common.MYSTOR)
-                _update_ner_run_details(run_id, blobid, hdcpupdatedate, state=job_states.NLP_NER_COMPLETE)
-                _update_ner_runs(run_id, state=job_states.NLP_NER_COMPLETE)
+        try:
+            # save json to db
+            json_obj_to_store = json.dumps(results, indent=4, sort_keys=True)
+            # save annotated notes to object store
+            common.write_to_storage(blobid,
+                                    hdcpupdatedate,
+                                    payload=json_obj_to_store,
+                                    key=common.get_default_keyname(blobid),
+                                    connection=common.MYSTOR)
+            _update_ner_run_details(run_id, blobid, hdcpupdatedate, state=job_states.NLP_NER_COMPLETE)
+            _update_ner_runs(run_id, state=job_states.NLP_NER_COMPLETE)
 
-            except Exception as e:
-                message = "Exception occurred: {}".format(e)
-                common.log_error_and_failure_for_ner_job(run_id, blobid, hdcpupdatedate, message,
-                                                         "Save JSON NER Blobs")
-                continue
+        except Exception as e:
+            message = "Exception occurred: {}".format(e)
+            common.log_error_and_failure_for_ner_job(run_id, blobid, hdcpupdatedate, message,
+                                                     "Save JSON NER Blobs")
+            continue
 
-            record_processed += 1
+        record_processed += 1
 
-            print("{} records processed for update date: {}".format(record_processed, hdcpupdatedate))
+    print("{} records processed".format(record_processed))
 
 
 def _update_ner_run_details(run_id, blobid, hdcpupdatedate, state):
