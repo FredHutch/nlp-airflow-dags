@@ -84,6 +84,10 @@ REVIEW_BYPASSED_ANNOTATION_TYPE = 'REVIEW BYPASSED'
 DEID_ANNOTATION_TYPE = 'DEID ANNOTATIONS'
 RESYNTH_ANNOTATION_TYPE = 'RESYNTHESIZED ANNOTATIONS'
 
+#threshold for af4
+STALE_THRESHOLD = Variable.get("STALE_THRESHOLD", 1)
+
+
 #the default 'beginning time' for any date-based choosing strategies
 DT_FORMAT = "%Y-%m-%d %H:%M:%S.%f"
 EPOCH = Variable.get("EPOCH", datetime(1970, 1, 1).strftime(DT_FORMAT)[:-3])
