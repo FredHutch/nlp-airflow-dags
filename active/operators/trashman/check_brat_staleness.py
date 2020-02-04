@@ -20,13 +20,13 @@ def check_brat_staleness(**kwargs):
                  "{}@{}".format(ssh_hook.username, ssh_hook.remote_host), remote_command])
     check_date = datetime.now()
     #converte bytes to str/datetime datatypes
-    parsed_output  = parse_remote_output(output)
+    parsed_output  = parse_remote_output(output, check_date)
     brat_files = compare_dates(parsed_find_output)
     write_run_details(new_run_id, check_date, brat_files)
     return new_run_id, job_start_date, check_date
 
 
-def parse_remote_output(remote_command_output):
+def parse_remote_output(remote_command_output, check_date):
     """
     Checks contents in brat for staleness.
 
@@ -40,15 +40,14 @@ def parse_remote_output(remote_command_output):
     #decode subprocess output from bytes to str
     brat_files = []
     decoded = remote_command_output.decode("utf-8")
-    current_date = datetime.now()
     #parse into list of dictionaries
     for line in decoded.splitlines():
         split_string = line.split('\t')
-        modified_date, path = split_string[0], split_string[1]
+        modified_date, path = datetime.strptime(split_string[0], '%Y-%m-%d'), split_string[1]
         files = {
                  'File': path, 
-                 'ModifiedDate': datetime.strptime(modified_date, '%Y-%m-%d'), 
-                 'ElapsedTime': current_date - datetime.strptime(modified_date, '%Y-%m-%d')
+                 'ModifiedDate': modified_date, 
+                 'ElapsedTime': check_date - modified_date
                 }
         brat_files.append(files)
     return brat_files
