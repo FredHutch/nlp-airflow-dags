@@ -2,19 +2,13 @@ import json
 from datetime import datetime, timedelta
 import active.utilities.job_states as job_states
 import active.utilities.common as common
-from airflow.models import Variable
 
-STALE_THRESHOLD = Variable.get("STALE_THRESHOLD")
-
-def check_brat_modification_date(**kwargs):
+def check_brat_staleness(**kwargs):
     """
-    Checks contents in brat for staleness.
-
+    Checks contents in brat for based on modification times within brat file system.
     """
 
     #TODO: Generate a job_id and pair with staleness check from DB.
-
-    job_start_date = datetime.now() #this should go in the job generation instead maybe?
     datefolder = kwargs['datefolder']
     #new_run_id = generate_job_id()
     ssh_hook = SSHHook(ssh_conn_id="prod-brat")
@@ -59,28 +53,15 @@ def parse_remote_output(remote_command_output):
         brat_files.append(files)
     return brat_files
 
-def compare_dates(brat_files):
+def compare_dates(brat_files, stale_threshold=STALE_THRESHOLD):
     """
     Compares dates with predefined airflow threshold (days)
     """
     for file in brat_files:
-        if file['ElapsedTime'] > STALE_THRESHOLD:
-            #flag as a stale
-            file.update({'IsStale': 1})
-        else:
-            file.update({'IsStale': 0})
+        file.update({'IsStale': (1 if d.get('ElapsedTime') > stale_threshold else 0)})
     return brat_files
 
-def get_stale_count(brat_files):
-    """
-    Calculates number of stale files
-    """
-    stale_count = 0
-    for file in brat_files:
-        count += file['IsStale']
-    return stale_count
-
-def write_run_details(run_id, check_date, brat_files, threshold=STALE_THRESHOLD):
+def write_run_details(run_id, check_date, brat_files, stale_hreshold=STALE_THRESHOLD):
     """
     Writes run statistics on stale v. nonstale files in brat. Used to track modification over time.
     param: brat_files: list of dicts containing File, ModifiedDate, ElapsedTime, and IsStale
@@ -90,10 +71,10 @@ def write_run_details(run_id, check_date, brat_files, threshold=STALE_THRESHOLD)
                        "VALUES (%s, %s, %s, %s, %s, %s)")
     brat_capacity = len(brat_files)
     #get count of stale v. nonstale in current run
-    stale_count = get_stale_count(brat_files)
+    stale_count = sum(d.get('IsStale') for d in brat_files)
     non_stale_count = stale_count - brat_capacity
     #write job_id, count of stale vs nonstale to db, and threshold parameter
-    common.NLP_DB.run(tgt_insert_stmt, parameters=(run_id, brat_capacity, stale_count, non_stale_count, threshold, str(check_date)))
+    common.NLP_DB.run(tgt_insert_stmt, parameters=(run_id, brat_capacity, stale_count, non_stale_count, stale_threshold, str(check_date)))
 
 def notify_email(context, **kwargs):
     """
@@ -102,8 +83,8 @@ def notify_email(context, **kwargs):
     """
     alert = EmailOperator(
         task_id=alertTaskID,
-        #for testing purposes
-        to='ritche.long@fredhutch.org',
+        #for testing purposes+
+        to='rlong@fredhutch.org',
         subject='Stale Annotations Report',
         html_content='test',
         dag=dag
