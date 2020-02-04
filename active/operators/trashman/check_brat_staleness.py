@@ -2,6 +2,10 @@ import json
 from datetime import datetime, timedelta
 import active.utilities.job_states as job_states
 import active.utilities.common as common
+from active.utilities.common import STALE_THRESHOLD
+
+from airflow.operators.email_operator import EmailOperator
+
 
 def check_brat_staleness(ds, **kwargs):
     """
@@ -56,28 +60,30 @@ def compare_dates(brat_files, stale_threshold=STALE_THRESHOLD):
     Compares dates with predefined airflow threshold (days)
     """
     for file in brat_files:
-        file.update({'IsStale': (1 if d.get('ElapsedTime') > stale_threshold else 0)})
+        file.update({'IsStale': (1 if file.get('ElapsedTime') > stale_threshold else 0)})
     return brat_files
 
-def write_run_details(run_id, check_date, brat_files, stale_hreshold=STALE_THRESHOLD):
+def write_run_details(run_id, check_date, brat_files, stale_threshold=STALE_THRESHOLD):
     """
     Writes run statistics on stale v. nonstale files in brat. Used to track modification over time.
     param: brat_files: list of dicts containing File, ModifiedDate, ElapsedTime, and IsStale
     """
-    tgt_insert_stmt = ("INSERT INTO af_trashman_runs_details"\
-                       "(af_trashman_runs_id, brat_capacity, stale_count, non_stale_count, stale_threshold, stale_check_date)"\
+    tgt_insert_stmt = ("INSERT INTO af_trashman_runs_details"
+                       "(af_trashman_runs_id, brat_capacity, stale_count, non_stale_count, stale_threshold, stale_check_date)"
                        "VALUES (%s, %s, %s, %s, %s, %s)")
     brat_capacity = len(brat_files)
     #get count of stale v. nonstale in current run
     stale_count = sum(d.get('IsStale') for d in brat_files)
     non_stale_count = stale_count - brat_capacity
     #write job_id, count of stale vs nonstale to db, and threshold parameter
-    common.NLP_DB.run(tgt_insert_stmt, parameters=(run_id, brat_capacity, stale_count, non_stale_count, stale_threshold, str(check_date)))
+    common.NLP_DB.run(tgt_insert_stmt,
+                      parameters=(run_id, brat_capacity, stale_count, non_stale_count, stale_threshold, str(check_date)))
 
 def notify_email(context, **kwargs):
     """
     Sends a notification email to the service account.
     TODO: Redo tests on email operator
+    TODO: Move this to its own 'operators' module for reuse.
     """
     alert = EmailOperator(
         task_id=alertTaskID,
@@ -87,6 +93,6 @@ def notify_email(context, **kwargs):
         html_content='test',
         dag=dag
     )
-    title = ("Trashman Report: Stale Files in Brat for {trashman_run}".format(trashman_run=str(datetime.now()))
+    title = ("Trashman Report: Stale Files in Brat for {trashman_run}".format(trashman_run=str(datetime.now())))
     body = json.dumps(context)
     #execute email
