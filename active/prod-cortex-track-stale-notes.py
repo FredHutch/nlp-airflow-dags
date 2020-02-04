@@ -15,7 +15,7 @@ DAG_NAME ='prod-cortex-track-stale-notes'
 args = {
     'owner': 'whiteau',
     'depends_on_past': False,
-    'start_date': datetime.utcnow(),
+    'start_date': datetime.now(),
     'retries': 1,
     'retry_delay': timedelta(minutes=5),
 }
@@ -34,4 +34,4 @@ check_brat_staleness = PythonOperator(task_id='check_brat_staleness',
                                       python_callable=trashman.check_brat_staleness,
                                       dag=dag)
 
-generate_job_id >> check_brat_staleness#>> redrive_stale_notes
+generate_job_id >> check_brat_staleness

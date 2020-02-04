@@ -3,14 +3,14 @@ from datetime import datetime, timedelta
 import active.utilities.job_states as job_states
 import active.utilities.common as common
 
-def check_brat_staleness(**kwargs):
+def check_brat_staleness(ds, **kwargs):
     """
     Checks contents in brat for based on modification times within brat file system.
     """
 
     #TODO: Generate a job_id and pair with staleness check from DB.
-    datefolder = kwargs['datefolder']
     #new_run_id = generate_job_id()
+    check_date = datetime.strptime(ds, '%Y-%m-%d')
     ssh_hook = SSHHook(ssh_conn_id="prod-brat")
     remote_nlp_home_path = "/mnt/encrypted/brat-v1.3_Crunchy_Frog/data/nlp"
     #list all the files ending with ann and find the modified dates
@@ -18,7 +18,6 @@ def check_brat_staleness(**kwargs):
     #output of check_output is in bytes
     output = subprocess.check_output(["ssh", "-o StrictHostKeyChecking=no", "-p {}".format(ssh_hook.port),
                  "{}@{}".format(ssh_hook.username, ssh_hook.remote_host), remote_command])
-    check_date = datetime.now()
     #converte bytes to str/datetime datatypes
     parsed_output  = parse_remote_output(output, check_date)
     brat_files = compare_dates(parsed_find_output)
