@@ -46,6 +46,14 @@ __annotations_prefix_dict = {
          "DEV": 'fh-nlp-deid'}
 }
 
+__blob_process_prefix_dict = {
+    'SWIFT':
+        {"PROD": "fh-nlp-deid-swift/NER_processed_blobs",
+         "DEV": "fh-nlp-deid-swift-dev/NER_processed_blobs"},
+    'S3':
+        {"PROD": 'fh-nlp-deid',
+         "DEV": 'fh-nlp-deid'}
+}
 __storage_writer = {'SWIFT':swift,
                     'S3':s3}
 
@@ -70,6 +78,7 @@ FLASK_BLOB_NLP_API_HOOK = HttpHook(http_conn_id='fh-nlp-api-flask-blob-nlp', met
 OBJ_STORE = __storage_dict[STORAGE][STAGE]
 BUCKET_NAME = __bucket_dict[STORAGE][STAGE]
 ANNOTATION_PREFIX = __annotations_prefix_dict[STORAGE][STAGE]
+BLOB_PROCESS_PREFIX = __blob_process_prefix_dict[STORAGE][STAGE]
 
 JOB_RUNNING = 'scheduled'
 JOB_COMPLETE = 'completed'
@@ -298,7 +307,7 @@ def write_to_storage(blobid, update_date, payload, key, connection):
                                        job_date)
 
 
-def read_from_storage(blobid, connection, blob_prefix=ANNOTATION_PREFIX):
+def read_from_storage(blobid, connection, blob_prefix):
     """
     create appropriate storage hook, upload json object to the object store (swift or s3)
     :param key: file name shown on swift or s3, named by blobid
@@ -313,5 +322,5 @@ def read_from_storage(blobid, connection, blob_prefix=ANNOTATION_PREFIX):
         return connection.object_get_json(get_default_keyname(blobid, prefix=blob_prefix))
 
 
-def get_default_keyname(blobid, prefix=ANNOTATION_PREFIX):
+def get_default_keyname(blobid, prefix):
     return '{prefix}/{id}.json'.format(prefix=prefix, id=blobid)

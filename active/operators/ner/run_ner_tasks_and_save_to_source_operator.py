@@ -16,9 +16,9 @@ def run_ner_task(**kwargs):
         # record number of NER tasks
         record_processed = 0
 
-        note = common.read_from_storage(blobid, connection=common.MYSTOR)
-        preprocessing_results = flask_blob_nlp.call_flask_blob_nlp_preprocessing(blobid, hdcpupdatedate, note)
-        sectionerx_results = flask_blob_nlp.call_flask_blob_nlp_sectionerex(blobid, hdcpupdatedate, note)
+        note = common.read_from_storage(blobid, connection=common.MYSTOR, blob_prefix=common.ANNOTATION_PREFIX)
+        preprocessing_results = flask_blob_nlp.call_flask_blob_nlp_preprocessing(blobid, hdcpupdatedate, note['resynthesized_notes'])
+        sectionerx_results = flask_blob_nlp.call_flask_blob_nlp_sectionerex(blobid, hdcpupdatedate, note['resynthesized_notes'])
 
         if preprocessing_results is None:
             print("No NER preprocessing results returned for id: {id}. Failing note and Continuing".format(id=blobid))
@@ -46,7 +46,7 @@ def run_ner_task(**kwargs):
             common.write_to_storage(blobid,
                                     hdcpupdatedate,
                                     payload=json_obj_to_store,
-                                    key=common.get_default_keyname(blobid),
+                                    key=common.get_default_keyname(blobid, prefix=common.BLOB_PROCESS_PREFIX),
                                     connection=common.MYSTOR)
             _update_ner_run_details(run_id, blobid, hdcpupdatedate, state=job_states.NLP_NER_COMPLETE)
             _update_ner_runs(run_id, state=job_states.NLP_NER_COMPLETE)

@@ -299,7 +299,7 @@ def resynthesize_notes_marked_as_deid(**kwargs):
                     common.write_to_storage(blobid,
                                        hdcpupdatedate,
                                        payload=json_obj_to_store,
-                                       key=common.get_default_keyname(blobid))
+                                       key=common.get_default_keyname(blobid, prefix=common.ANNOTATION_PREFIX))
 
                 except common.OutOfDateAnnotationException as e:
                     print("OutOfDateAnnotationException occurred: {}".format(e))
