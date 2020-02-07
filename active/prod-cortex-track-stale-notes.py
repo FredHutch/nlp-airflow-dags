@@ -34,4 +34,9 @@ check_brat_staleness = PythonOperator(task_id='check_brat_staleness',
                                       python_callable=trashman.check_brat_staleness,
                                       dag=dag)
 
-generate_job_id >> check_brat_staleness
+redrive_jobs = PythonOperator(task_id='redrive_jobs',
+                                      provide_context=True,
+                                      python_callable=trashman.redrive_jobs,
+                                      dag=dag)
+
+generate_job_id >> check_brat_staleness >> redrive_jobs

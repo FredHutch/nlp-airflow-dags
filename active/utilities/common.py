@@ -322,5 +322,13 @@ def read_from_storage(blobid, connection, blob_prefix):
         return connection.object_get_json(get_default_keyname(blobid, prefix=blob_prefix))
 
 
+def get_last_run_id(run_table_name, run_id_name):
+    tgt_select_stmt = "SELECT max({run_id}) FROM {run_table}".format(run_table=run_table_name, run_id=run_id_name)
+    last_run_id = (AIRFLOW_NLP_DB.get_first(tgt_select_stmt) or (None,))
+
+    return last_run_id[0]
+
+ 
 def get_default_keyname(blobid, prefix):
     return '{prefix}/{id}.json'.format(prefix=prefix, id=blobid)
+

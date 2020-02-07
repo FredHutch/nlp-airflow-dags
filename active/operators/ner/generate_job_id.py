@@ -6,7 +6,6 @@ import utilities.common as common
 from airflow.operators.python_operator import PythonOperator
 
 
-
 def generate_job_id(**kwargs):
     """
     return job id since last task (NER) run
