@@ -21,7 +21,7 @@ def call_flask_blob_nlp_endpoint(blobid, hdcpupdatedate, note, endpoint):
     call flaskblobnlp to process the de-id notes
     """
     try:
-        resp = common.FLASK_BLOB_NLP_API_HOOK.run("/{}".format(endpoint),
+        resp = common.FLASK_BLOB_NLP_API_HOOK.run("/{}/".format(endpoint),
                             data=json.dumps({"extract_text": note}),
                             headers={"Content-Type": "application/json"})
         result = json.loads(resp.content)
