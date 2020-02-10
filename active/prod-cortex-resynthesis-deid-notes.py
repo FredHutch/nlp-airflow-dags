@@ -296,10 +296,14 @@ def resynthesize_notes_marked_as_deid(**kwargs):
                                              'note_type': note_metadata["cd_descr"]},
                                             indent=4, sort_keys=True)
                     # save annotated notes to object store
-                    common.write_to_storage(blobid,
-                                       hdcpupdatedate,
-                                       payload=json_obj_to_store,
-                                       key=common.get_default_keyname(blobid, prefix=common.ANNOTATION_PREFIX))
+                    common.write_to_storage(blobid=blobid,
+                                            sourcetable="af_resynthesis_runs_details",
+                                            job_state_type="resynth_status",
+                                            updatedate_type='hdcpupdatedate',
+                                            update_date=hdcpupdatedate,
+                                            payload=json_obj_to_store,
+                                            key=common.get_default_keyname(blobid,
+                                                                           prefix=common.ANNOTATION_PREFIX))
 
                 except common.OutOfDateAnnotationException as e:
                     print("OutOfDateAnnotationException occurred: {}".format(e))

@@ -260,10 +260,13 @@ def get_patient_data_from_source(patientId):
             or (None, None, None, None))
 
 
-def _get_most_recent_successful_note_job_update_date(blobid):
-    select_stmt = ("SELECT MAX(HDCPUpdateDate)"
-                   " FROM af_resynthesis_runs_details"
-                   " WHERE HDCOrcaBlobID = %s AND resynth_status = %s")
+def _get_most_recent_successful_note_job_update_date(blobid, sourcetable, updatedate_type, job_state_type):
+    select_stmt = ("SELECT MAX({updatedate_type}) " \
+                   "FROM {sourcetable} " \
+                   "WHERE HDCOrcaBlobID = %s " \
+                   "AND {job_state_type} = %s".format(updatedate_type=updatedate_type,
+                                                      sourcetable=sourcetable,
+                                                      job_state_type=job_state_type))
 
     return AIRFLOW_NLP_DB.get_first(select_stmt, parameters=(blobid, job_states.JOB_COMPLETE))[0]
 
@@ -285,7 +288,7 @@ def _get_last_resynth_date_on_storage(**kwargs):
     last_resynth_date_on_storage = (AIRFLOW_NLP_DB.get_first(select_stmt, parameters=(job_states.JOB_COMPLETE,)) or (None,))
     return last_resynth_date_on_storage[0]
 
-def write_to_storage(blobid, update_date, payload, key, connection):
+def write_to_storage(blobid, sourcetable, job_state_type, updatedate_type, update_date, payload, key, connection):
     """
     create appropriate storage hook, upload json object to the object store (swift or s3)
     :param blobid: the hdcorcablobid for the note object
@@ -293,18 +296,18 @@ def write_to_storage(blobid, update_date, payload, key, connection):
     :param string_payload: file to be dropped off
     :param key: file name shown on S3
     """
-    job_date = _get_most_recent_successful_note_job_update_date(blobid)
+    job_date = _get_most_recent_successful_note_job_update_date(blobid, sourcetable, updatedate_type, job_state_type)
     print("Verifying storage status for blobId: {}, incoming update Date: {}, saved update date: {}".format(
           blobid, update_date, job_date))
     if job_date is None or job_date <= update_date:
         connection.object_put_json(key, json.dumps(payload))
         return
-
-    raise OutOfDateAnnotationException("OutOfDateAnnotationException: \
-                                       A newer version of the annotation exists in Object Storage ",
-                                       blobid,
-                                       update_date,
-                                       job_date)
+    if sourcetable == "af_resynthesis_runs_details":
+        raise OutOfDateAnnotationException("OutOfDateAnnotationException: \
+                                           A newer version of the annotation exists in Object Storage ",
+                                           blobid,
+                                           update_date,
+                                           job_date)
 
 
 def read_from_storage(blobid, connection, blob_prefix):

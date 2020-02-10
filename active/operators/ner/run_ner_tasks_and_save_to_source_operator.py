@@ -43,8 +43,11 @@ def run_ner_task(**kwargs):
             # save json to db
             json_obj_to_store = json.dumps(results, indent=4, sort_keys=True)
             # save annotated notes to object store
-            common.write_to_storage(blobid,
-                                    hdcpupdatedate,
+            common.write_to_storage(blobid = blobid,
+                                    sourcetable = 'af_ner_runs_details',
+                                    job_state_type = 'ner_status',
+                                    updatedate_type = 'resynth_date',
+                                    update_date = resynth_date,
                                     payload=json_obj_to_store,
                                     key=common.get_default_keyname(blobid, prefix=common.BLOB_PROCESS_PREFIX),
                                     connection=common.MYSTOR)
