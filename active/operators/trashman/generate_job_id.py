@@ -1,7 +1,7 @@
-import active.utilities.job_states as job_states
-import active.utilities.common as common
+import utilities.job_states as job_states
+import utilities.common as common
 from datetime import datetime
-from . import REDRIVE_RUN_ID, REDRIVE_RUNS_TABLE
+from operators.trashman.common_vars import REDRIVE_RUN_ID, REDRIVE_RUNS_TABLE
 
 
 def generate_job_id(**kwargs):
@@ -15,7 +15,7 @@ def generate_job_id(**kwargs):
 
     _insert_redrive_scheduled(last_run_id, job_start_date)
 
-    return last_run_id
+    return last_run_id, job_start_date
 
 
 def _get_last_redrive_run_id():

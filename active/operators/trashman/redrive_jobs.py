@@ -1,8 +1,8 @@
 import json
 from datetime import datetime, timedelta
-import active.utilities.job_states as job_states
-import active.utilities.common as common
-from active.operators.trashman import REDRIVE_TASK_FN
+import utilities.job_states as job_states
+import utilities.common as common
+from operators.trashman.common_vars import REDRIVE_TASK_FN
 """
 TODO: Implement redriving capabilities.
 """

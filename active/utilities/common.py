@@ -6,6 +6,7 @@ from datetime import datetime
 from airflow.hooks.http_hook import HttpHook
 from airflow.hooks.mssql_hook import MsSqlHook
 from airflow.hooks.postgres_hook import PostgresHook
+from airflow.contrib.hooks.ssh_hook import SSHHook
 from airflow.models import Variable
 from sci.store import swift, s3
 import utilities.job_states as job_states
@@ -22,6 +23,13 @@ __airflow_nlp_db_stage_dict = {"PROD": PostgresHook(postgres_conn_id="prod-airfl
 __annotations_db_stage_dict = {"PROD": MsSqlHook(mssql_conn_id="prod_nlp_annos"),
                                "DEV": MsSqlHook(mssql_conn_id="dev_nlp_annos")
                                }
+__brat_ssh_stage_dict = {"PROD": SSHHook(ssh_conn_id="prod-brat"),
+                         "DEV": SSHHook(ssh_conn_id="prod-brat")
+                        }
+__remote_nlp_home_path_dict = {"PROD": "/mnt/encrypted/brat-v1.3_Crunchy_Frog/data/nlp",
+                               "DEV": "/mnt/encrypted/brat-v1.3_Crunchy_Frog/data/nlp"
+                        }
+
 __storage_dict = {'SWIFT':
                     {"PROD":'Swift__HDC_project_uw-clinic-notes',
                      "DEV":'AUTH_Swift__HDC'},
@@ -73,6 +81,8 @@ ERROR_DB = __error_db_stage_dict[STAGE]
 SOURCE_NOTE_DB = __source_note_db_stage_dict[STAGE]
 AIRFLOW_NLP_DB = __airflow_nlp_db_stage_dict[STAGE]
 ANNOTATIONS_DB = __annotations_db_stage_dict[STAGE]
+BRAT_SSH_HOOK = __brat_ssh_stage_dict[STAGE]
+BRAT_NLP_FILEPATH = __remote_nlp_home_path_dict[STAGE]
 FLASK_BLOB_NLP_API_HOOK = HttpHook(http_conn_id='fh-nlp-api-flask-blob-nlp', method='POST')
 
 OBJ_STORE = __storage_dict[STORAGE][STAGE]
