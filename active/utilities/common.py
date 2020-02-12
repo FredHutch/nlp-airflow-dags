@@ -65,7 +65,22 @@ __blob_process_prefix_dict = {
 __storage_writer = {'SWIFT':swift,
                     'S3':s3}
 
+__deid_nlp_http_hook = {"PROD": HttpHook(http_conn_id='fh-nlp-api-deid', method='POST'),
+                        "DEV": HttpHook(http_conn_id='fh-nlp-api-deid', method='POST')
+                        }
+__nlp_test_http_hook = {"PROD": HttpHook(http_conn_id='fh-nlp-api-test', method='POST'),
+                        "DEV": HttpHook(http_conn_id='fh-nlp-api-test', method='POST')
+                        }
+__flask_resynth_http_hook = {"PROD": HttpHook(http_conn_id='fh-nlp-api-resynth', method='POST'),
+                        "DEV": HttpHook(http_conn_id='fh-nlp-api-resynth', method='POST')
+                        }
+__flask_blob_nlp_http_hook = {"PROD": HttpHook(http_conn_id='fh-nlp-api-flask-blob-nlp', method='POST'),
+                              "DEV": HttpHook(http_conn_id='fh-nlp-api-flask-blob-nlp', method='POST')
+                              }
+
 STAGE = Variable.get("NLP_ENVIRON")
+BRAT_DEFAULT_ASSIGNEE = "ALL_USERS"
+BRAT_ASSIGNEE = Variable.get("BRAT_CONFIG")["BRAT_ASSIGNEE"]
 MAX_BATCH_SIZE = Variable.get("MAX_BATCH_SIZE", 3)
 os.environ['OS_AUTH_URL'] =  Variable.get('OS_AUTH_URL')
 os.environ['OS_PASSWORD'] = Variable.get('OS_PASSWORD')
@@ -81,27 +96,17 @@ ERROR_DB = __error_db_stage_dict[STAGE]
 SOURCE_NOTE_DB = __source_note_db_stage_dict[STAGE]
 AIRFLOW_NLP_DB = __airflow_nlp_db_stage_dict[STAGE]
 ANNOTATIONS_DB = __annotations_db_stage_dict[STAGE]
+DEID_NLP_API_HOOK = __deid_nlp_http_hook[STAGE]
+NLP_API_TEST_HOOK = __nlp_test_http_hook[STAGE]
+FLASK_RESYNTH_NLP_API_HOOK = __flask_resynth_http_hook[STAGE]
+FLASK_BLOB_NLP_API_HOOK = __flask_blob_nlp_http_hook[STAGE]
 BRAT_SSH_HOOK = __brat_ssh_stage_dict[STAGE]
 BRAT_NLP_FILEPATH = __remote_nlp_home_path_dict[STAGE]
-FLASK_BLOB_NLP_API_HOOK = HttpHook(http_conn_id='fh-nlp-api-flask-blob-nlp', method='POST')
 
 OBJ_STORE = __storage_dict[STORAGE][STAGE]
 BUCKET_NAME = __bucket_dict[STORAGE][STAGE]
 ANNOTATION_PREFIX = __annotations_prefix_dict[STORAGE][STAGE]
 BLOB_PROCESS_PREFIX = __blob_process_prefix_dict[STORAGE][STAGE]
-
-JOB_RUNNING = 'scheduled'
-JOB_COMPLETE = 'completed'
-JOB_FAILURE = 'failed'
-
-BRAT_PENDING = 'PENDING REVIEW'
-BRAT_READY_TO_EXTRACT = "EXTRACTION READY"
-BRAT_COMPLETE = "REVIEW COMPLETE"
-
-BRAT_REVIEWED_ANNOTATION_TYPE = 'BRAT REVIEWED ANNOTATION'
-REVIEW_BYPASSED_ANNOTATION_TYPE = 'REVIEW BYPASSED'
-DEID_ANNOTATION_TYPE = 'DEID ANNOTATIONS'
-RESYNTH_ANNOTATION_TYPE = 'RESYNTHESIZED ANNOTATIONS'
 
 #threshold for af4
 STALE_THRESHOLD = Variable.get("STALE_THRESHOLD", 1)
@@ -110,7 +115,6 @@ STALE_THRESHOLD = Variable.get("STALE_THRESHOLD", 1)
 #the default 'beginning time' for any date-based choosing strategies
 DT_FORMAT = "%Y-%m-%d %H:%M:%S.%f"
 EPOCH = Variable.get("EPOCH", datetime(1970, 1, 1).strftime(DT_FORMAT)[:-3])
-
 
 class OutOfDateAnnotationException(Exception):
     def __init__(self, message, blobid, blob_date, compared_date):
@@ -149,16 +153,16 @@ def log_error_message(blobid, hdcpupdatedate, state, time, error_message):
     return
 
 def save_brat_reviewed_annotation(note_uid, hdcpupdatedate, json_annotation):
-    return save_json_annotation(note_uid, hdcpupdatedate, json_annotation, BRAT_REVIEWED_ANNOTATION_TYPE)
+    return save_json_annotation(note_uid, hdcpupdatedate, json_annotation, job_states.BRAT_REVIEWED_ANNOTATION_TYPE)
 
 def save_deid_annotation(note_uid, hdcpupdatedate, json_annotation):
-    return save_json_annotation(note_uid, hdcpupdatedate, json_annotation, DEID_ANNOTATION_TYPE)
+    return save_json_annotation(note_uid, hdcpupdatedate, json_annotation, job_states.DEID_ANNOTATION_TYPE)
 
 def save_unreviewed_annotation(note_uid, hdcpupdatedate, json_annotation):
-    return save_json_annotation(note_uid, hdcpupdatedate, json_annotation, REVIEW_BYPASSED_ANNOTATION_TYPE)
+    return save_json_annotation(note_uid, hdcpupdatedate, json_annotation, job_states.REVIEW_BYPASSED_ANNOTATION_TYPE)
 
 def save_resynthesis_annotation(note_uid, hdcpupdatedate, json_annotation):
-    return save_json_annotation(note_uid, hdcpupdatedate, json_annotation, RESYNTH_ANNOTATION_TYPE)
+    return save_json_annotation(note_uid, hdcpupdatedate, json_annotation, job_states.RESYNTH_ANNOTATION_TYPE)
 
 def save_json_annotation(hdcorcablobid, hdcpupdatedate, json_annotation, annotation_type):
     tgt_insert_stmt = ("INSERT INTO annotations "

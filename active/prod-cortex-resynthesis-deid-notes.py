@@ -1,18 +1,17 @@
 from datetime import datetime, timedelta
 import json
 
-from airflow.hooks.http_hook import HttpHook
 from airflow.operators.python_operator import PythonOperator
 from airflow.models import DAG
 
 import utilities.common as common
-from utilities.common import JOB_RUNNING, JOB_COMPLETE, JOB_FAILURE, \
+from utilities.job_states import JOB_RUNNING, JOB_COMPLETE, JOB_FAILURE, \
     REVIEW_BYPASSED_ANNOTATION_TYPE, BRAT_REVIEWED_ANNOTATION_TYPE
 
 args = {
     'owner': 'whiteau',
     'depends_on_past': False,
-    'start_date': datetime.utcnow(),
+    'start_date': datetime.now(),
     'retries': 1,
     'retry_delay': timedelta(minutes=5),
 }
@@ -67,7 +66,7 @@ def generate_job_id(**kwargs):
 
     if update_date_from_last_run is None:
         # first run
-        update_date_from_last_run = datetime(1970, 1, 1).strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
+        update_date_from_last_run = common.EPOCH
 
     last_run_id = (_get_last_resynth_run_id() or 0)
     new_run_id = last_run_id + 1
@@ -76,7 +75,7 @@ def generate_job_id(**kwargs):
                                                                            date=update_date_from_last_run))
     # get last update date from source since last successful run
     # then pull record id with new update date from source
-    job_start_date = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
+    job_start_date = datetime.now().strftime(common.DT_FORMAT)[:-3]
     datecreated = []
     for row in _get_annotations_since_date(update_date_from_last_run):
         datecreated.append(row[0])
@@ -157,18 +156,17 @@ def _get_annotations_by_id_and_created_date(blobid, date):
 
 
 def _call_resynthesis_api(blobid, hdcpupdatedate, deid_note, deid_annotations, deid_alias):
-    api_hook = HttpHook(http_conn_id='fh-nlp-api-resynth', method='POST')
     results = None
     print("resynth post data for blob {}".format(blobid))
     try:
-        resp = api_hook.run("/resynthesize",
+        resp = common.FLASK_RESYNTH_NLP_API_HOOK.run("/resynthesize",
                             data=json.dumps({"text": deid_note, "annotations": deid_annotations,
                                              "alias": deid_alias}),
                             headers={"Content-Type": "application/json"})
         results = json.loads(resp.content)
     except Exception as e:
         print("Exception occurred: {}".format(e))
-        time_of_error = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
+        time_of_error = datetime.now().strftime(common.DT_FORMAT)[:-3]
         common.log_error_message(blobid=blobid, hdcpupdatedate=hdcpupdatedate, state="Flask Resynth API",
                                  time=time_of_error, error_message=str(e))
 
@@ -200,7 +198,7 @@ def cast_start_end_as_int(json_data, blobid, hdcpupdatedate):
                 value = int(value)
             except Exception as ex:
                 print("Exception occurred: {}".format(ex))
-                time_of_error = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
+                time_of_error = datetime.now().strftime(common.DT_FORMAT)[:-3]
                 common.log_error_message(blobid, hdcpupdatedate=hdcpupdatedate, state='Load JSON annotations',
                                          time=time_of_error, error_message=str(ex))
         corrected_dict[key] = value
@@ -291,7 +289,7 @@ def resynthesize_notes_marked_as_deid(**kwargs):
                     common.save_resynthesis_annotation(blobid, hdcpupdatedate, str(record[blobid]))
                     json_obj_to_store = json.dumps({'resynthesized_notes': record[blobid]['text'],
                                              'patient_pubid': fake_id,
-                                             'service_date': service_dts[blobid].strftime("%Y-%m-%d %H:%M:%S.%f")[: -3],
+                                             'service_date': service_dts[blobid].strftime(common.DT_FORMAT)[: -3],
                                              'institution': note_metadata["instit"],
                                              'note_type': note_metadata["cd_descr"]},
                                             indent=4, sort_keys=True)
@@ -307,7 +305,7 @@ def resynthesize_notes_marked_as_deid(**kwargs):
 
                 except common.OutOfDateAnnotationException as e:
                     print("OutOfDateAnnotationException occurred: {}".format(e))
-                    time_of_error = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
+                    time_of_error = datetime.now().strftime(common.DT_FORMAT)[:-3]
                     common.log_error_message(blobid, hdcpupdatedate=hdcpupdatedate, state='Save Resynth to Object Store',
                                              time=time_of_error,
                                              error_message=str(e))

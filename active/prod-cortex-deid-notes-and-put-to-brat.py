@@ -3,18 +3,16 @@ import json
 import subprocess
 import base64
 
-from airflow.hooks import HttpHook
-from airflow.contrib.hooks.ssh_hook import SSHHook
-from airflow.operators import PythonOperator
+from airflow.operators.python_operator import PythonOperator
 from airflow.models import DAG
 import utilities.common as common
-from utilities.common import JOB_RUNNING, JOB_COMPLETE, JOB_FAILURE, REVIEW_BYPASSED_ANNOTATION_TYPE, BRAT_PENDING
+from utilities.job_states import JOB_RUNNING, JOB_COMPLETE, JOB_FAILURE, BRAT_PENDING
 
 
 args = {
     'owner': 'wchau',
     'depends_on_past': False,
-    'start_date': datetime.utcnow(),
+    'start_date': datetime.now(),
     'retries': 1,
     'retry_delay': timedelta(minutes=5),
 }
@@ -31,7 +29,7 @@ def generate_job_id(**kwargs):
 
     if update_date_from_last_run is None:
         # first run
-        update_date_from_last_run = datetime(1970, 1, 1).strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
+        update_date_from_last_run = common.EPOCH
     tgt_select_stmt = "SELECT max(af_runs_id) FROM af_runs"
     last_run_id = (common.AIRFLOW_NLP_DB.get_first(tgt_select_stmt)[0] or 0)
     new_run_id = last_run_id + 1
@@ -46,7 +44,7 @@ def generate_job_id(**kwargs):
                       "(af_runs_id, source_last_update_date, record_counts, job_start, job_status) "
                       "VALUES (%s, %s, %s, %s, %s)")
 
-    job_start_date = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
+    job_start_date = datetime.now().strftime(common.DT_FORMAT)[:-3]
     hdcpupdatedates = []
     total_job_count = common.MAX_BATCH_SIZE
     for row in common.SOURCE_NOTE_DB.get_records(src_select_stmt, parameters=(update_date_from_last_run,)):
@@ -104,10 +102,8 @@ def populate_blobid_in_job_table(**kwargs):
 
 def send_notes_to_brat(**kwargs):
     clinical_notes = kwargs['clinical_notes']
-    datefolder = kwargs['datefolder']
-    remote_nlp_home_path = "/mnt/encrypted/brat-v1.3_Crunchy_Frog/data/nlp"
-    remote_nlp_data_path = "{}/{}".format(remote_nlp_home_path, datefolder)
-    ssh_hook = SSHHook(ssh_conn_id="prod-brat")
+    datafolder = kwargs['datafolder']
+    remote_nlp_data_path = "{}/{}".format(common.BRAT_NLP_FILEPATH, datafolder)
 
     record_processed = 0
     for hdcorcablobid, notes in clinical_notes.items():
@@ -115,12 +111,12 @@ def send_notes_to_brat(**kwargs):
         if record_processed == 0:
             remote_command = "[ -d {} ] && echo 'found'".format(remote_nlp_data_path)
             is_datefolder_found = subprocess.getoutput(
-                "ssh {}@{} {}".format(ssh_hook.username, ssh_hook.remote_host, remote_command))
+                "ssh {}@{} {}".format(common.BRAT_SSH_HOOK.username, common.BRAT_SSH_HOOK.remote_host, remote_command))
 
             if is_datefolder_found != 'found':
                 remote_command = "mkdir {}".format(remote_nlp_data_path)
-                subprocess.call(["ssh", "-o StrictHostKeyChecking=no", "-p {}".format(ssh_hook.port),
-                                 "{}@{}".format(ssh_hook.username, ssh_hook.remote_host), remote_command])
+                subprocess.call(["ssh", "-o StrictHostKeyChecking=no", "-p {}".format(common.BRAT_SSH_HOOK.port),
+                                 "{}@{}".format(common.BRAT_SSH_HOOK.username, common.BRAT_SSH_HOOK.remote_host), remote_command])
 
         # send original notes to brat
         remote_command = """
@@ -139,8 +135,8 @@ def send_notes_to_brat(**kwargs):
             filename=hdcorcablobid
         )
 
-        subprocess.call(["ssh", "-o StrictHostKeyChecking=no", "-p {}".format(ssh_hook.port),
-                         "{}@{}".format(ssh_hook.username, ssh_hook.remote_host), remote_command])
+        subprocess.call(["ssh", "-o StrictHostKeyChecking=no", "-p {}".format(common.BRAT_SSH_HOOK.port),
+                         "{}@{}".format(common.BRAT_SSH_HOOK.username, common.BRAT_SSH_HOOK.remote_host), remote_command])
 
         # send annotated notes to brat
         phi_anno_data = []
@@ -166,7 +162,7 @@ def send_notes_to_brat(**kwargs):
         else:
             remote_command = "umask 002; touch {remotePath}/{filename}.ann;".format(remotePath=remote_nlp_data_path,
                                                                                     filename=hdcorcablobid)
-        subprocess.call(["ssh", "-p {}".format(ssh_hook.port), "{}@{}".format(ssh_hook.username, ssh_hook.remote_host),
+        subprocess.call(["ssh", "-p {}".format(common.BRAT_SSH_HOOK.port), "{}@{}".format(common.BRAT_SSH_HOOK.username, common.BRAT_SSH_HOOK.remote_host),
                          remote_command])
 
         update_brat_db_status(hdcorcablobid, notes['hdcpupdatedate'], full_file_name)
@@ -219,7 +215,6 @@ def save_person_info_to_temp_storage(blobid, hdcpupdatedate, patient_data):
 
 
 def annotate_clinical_notes(**kwargs):
-    api_hook = HttpHook(http_conn_id='fh-nlp-api-deid', method='POST')
     # get last update date
     (run_id, hdcpupdatedates) = kwargs['ti'].xcom_pull(task_ids='generate_job_id')
     tgt_select_stmt = ("SELECT HDCOrcaBlobId "
@@ -254,7 +249,7 @@ def annotate_clinical_notes(**kwargs):
                                        "annotation_by_source": True}
             record['hdcpupdatedate'] = hdcpupdatedate
             try:
-                resp = api_hook.run("/deid/annotate", data=json.dumps(record['original_note']),
+                resp = common.DEID_NLP_API_HOOK.run("/deid/annotate", data=json.dumps(record['original_note']),
                                     headers={"Content-Type": "application/json"})
                 record['annotated_note'] = json.loads(resp.content)
                 annotation_status = JOB_COMPLETE
@@ -265,7 +260,7 @@ def annotate_clinical_notes(**kwargs):
 
             common.AIRFLOW_NLP_DB.run(tgt_update_stmt,
                                       parameters=(annotation_status,
-                                                  datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3],
+                                                  datetime.now().strftime(common.DT_FORMAT)[:-3],
                                                   run_id,
                                                   hdcpupdatedate,
                                                   blobid))

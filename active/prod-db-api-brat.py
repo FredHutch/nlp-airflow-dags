@@ -3,15 +3,17 @@ import json
 import subprocess
 import base64
 
-from airflow.hooks import HttpHook, MsSqlHook, PostgresHook
-from airflow.contrib.hooks.ssh_hook import SSHHook
-from airflow.operators import PythonOperator, BashOperator
+import utilities.common as common
+
+from airflow.hooks.mssql_hook import MsSqlHook
+from airflow.hooks.postgres_hook import PostgresHook
+from airflow.operators.python_operator import PythonOperator
 from airflow.models import DAG
 
 args = {
     'owner' : 'wchau',
     'depends_on_past' : False,
-    'start_date' : datetime.utcnow(),
+    'start_date' : datetime.now(),
     'retries' : 1,
     'retry_delay' : timedelta(minutes=5),
 }
@@ -30,7 +32,7 @@ def generate_job_id(**kwargs):
 
     if update_date_from_last_run == None:
         # first run
-        update_date_from_last_run = datetime(1970, 1, 1).strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
+        update_date_from_last_run = common.EPOCH
 
     tgt_select_stmt = "SELECT max(af_runs_id) FROM af_runs"
     last_run_id = pg_hook.get_first(tgt_select_stmt)[0]
@@ -45,7 +47,7 @@ def generate_job_id(**kwargs):
     src_select_stmt = "SELECT HDCPUpdateDate, count(*) FROM orca_ce_blob WHERE HDCPUpdateDate > %s GROUP BY HDCPUpdateDate"
     tgt_insert_stmt = "INSERT INTO af_runs (af_runs_id, source_last_update_date, record_counts, job_start, job_status) VALUES (%s, %s, %s, %s, 'running')"
 
-    job_start_date = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
+    job_start_date = datetime.now().strftime(common.DT_FORMAT)[:-3]
     hdcpupdatedates = []
     for row in mssql_hook.get_records(src_select_stmt, parameters=(update_date_from_last_run,)):
         hdcpupdatedates.append(row[0])
@@ -77,9 +79,7 @@ def populate_blobid_in_job_table(**kwargs):
 def send_notes_to_brat(**kwargs):
     clinical_notes = kwargs['clinical_notes']
     datefolder = kwargs['datefolder']
-    remoteNlpHomePath = "/mnt/encrypted/brat-v1.3_Crunchy_Frog/data/nlp"
-    remoteNlpDataPath = "{}/{}".format(remoteNlpHomePath,datefolder)
-    ssh_hook = SSHHook(ssh_conn_id = "prod-brat")
+    remote_nlp_data_path = "{}/{}".format(common.BRAT_NLP_FILEPATH,datefolder)
 
     record_processed = 0
     for notes_items in clinical_notes:
@@ -88,12 +88,12 @@ def send_notes_to_brat(**kwargs):
 
         # create a subfolder for hdcpupdatedate
         if record_processed == 0:
-            remote_command = "[ -d {} ] && echo 'found'".format(remoteNlpDataPath)
-            is_datefolder_found=subprocess.getoutput("ssh {}@{} {}".format(ssh_hook.username, ssh_hook.remote_host, remote_command))
+            remote_command = "[ -d {} ] && echo 'found'".format(remote_nlp_data_path)
+            is_datefolder_found=subprocess.getoutput("ssh {}@{} {}".format(common.BRAT_SSH_HOOK.username, common.BRAT_SSH_HOOK.remote_host, remote_command))
 
             if is_datefolder_found != 'found':
-                remote_command = "mkdir {}".format(remoteNlpDataPath)
-                subprocess.call(["ssh", "-o StrictHostKeyChecking=no", "-p {}".format(ssh_hook.port), "{}@{}".format(ssh_hook.username, ssh_hook.remote_host), remote_command])
+                remote_command = "mkdir {}".format(remote_nlp_data_path)
+                subprocess.call(["ssh", "-o StrictHostKeyChecking=no", "-p {}".format(common.BRAT_SSH_HOOK.port), "{}@{}".format(common.BRAT_SSH_HOOK.username, common.BRAT_SSH_HOOK.remote_host), remote_command])
 
 
         # send original notes to brat
@@ -107,11 +107,11 @@ def send_notes_to_brat(**kwargs):
                          echo "{data}" | base64 -d - > {remotePath}/{filename}.txt;
         """.format(
                 data=str(base64.b64encode(notes['original_note']['extract_text'].encode('utf-8'))).replace("b'","").replace("'",""),
-                remotePath=remoteNlpDataPath,
+                remotePath=remote_nlp_data_path,
                 filename=hdcorcablobid[0]
                 )
 
-        subprocess.call(["ssh", "-o StrictHostKeyChecking=no", "-p {}".format(ssh_hook.port), "{}@{}".format(ssh_hook.username, ssh_hook.remote_host), remote_command])
+        subprocess.call(["ssh", "-o StrictHostKeyChecking=no", "-p {}".format(common.BRAT_SSH_HOOK.port), "{}@{}".format(common.BRAT_SSH_HOOK.username, common.BRAT_SSH_HOOK.remote_host), remote_command])
 
         # send annotated notes to brat
         phiAnnoData = []
@@ -128,20 +128,19 @@ def send_notes_to_brat(**kwargs):
                      echo '{data}' | base64 -d -  > {remotePath}/{filename}.ann;
             """.format(
                 data=str(base64.b64encode("\r\n".join(phiAnnoData).encode('utf-8'))).replace("b'","").replace("'",""),
-                remotePath=remoteNlpDataPath,
+                remotePath=remote_nlp_data_path,
                 filename=hdcorcablobid[0]
             )
         else:
-            remote_command = "umask 002; touch {remotePath}/{filename}.ann;".format(remotePath=remoteNlpDataPath,filename=hdcorcablobid[0])
+            remote_command = "umask 002; touch {remotePath}/{filename}.ann;".format(remotePath=remote_nlp_data_path,filename=hdcorcablobid[0])
 
-        subprocess.call(["ssh", "-p {}".format(ssh_hook.port), "{}@{}".format(ssh_hook.username, ssh_hook.remote_host), remote_command])
+        subprocess.call(["ssh", "-p {}".format(common.BRAT_SSH_HOOK.port), "{}@{}".format(common.BRAT_SSH_HOOK.username, common.BRAT_SSH_HOOK.remote_host), remote_command])
         record_processed += 1
 
 
 def annotate_clinical_notes(**kwargs):
     pg_hook    = PostgresHook(postgres_conn_id = "prod-airflow-nlp-pipeline")
     mssql_hook = MsSqlHook(mssql_conn_id = "prod-hidra-dz-db01")
-    api_hook   = HttpHook(http_conn_id='fh-nlp-api-test', method='POST')
 
     # get last update date
     (run_id, hdcpupdatedates) = kwargs['ti'].xcom_pull(task_ids='generate_job_id')
@@ -164,7 +163,7 @@ def annotate_clinical_notes(**kwargs):
 
                 record[blobid]['original_note'] = {"extract_text":"{}".format(row[0])}
                 try:
-                    resp = api_hook.run("/medlp/annotate/phi", data=json.dumps(record[blobid]['original_note']), headers={"Content-Type":"application/json"})
+                    resp = common.NLP_API_TEST_HOOK.run("/medlp/annotate/phi", data=json.dumps(record[blobid]['original_note']), headers={"Content-Type":"application/json"})
                     record[blobid]['annotated_note'] = json.loads(resp.content)
                     annotation_status = 'successful'
 
