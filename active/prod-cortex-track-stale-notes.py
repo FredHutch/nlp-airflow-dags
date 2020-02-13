@@ -38,8 +38,15 @@ check_brat_staleness = PythonOperator(task_id='check_brat_staleness',
 report_stale_brat_jobs = PythonOperator(task_id='report_stale_brat_jobs',
                               provide_context=True,
                               python_callable=trashman.report_stale_brat_jobs,
-                              op_args='check_brat_staleness',
+                              op_args=['report_stale_brat_jobs'],
                               dag=dag)
+
+mark_job_complete = PythonOperator(task_id='mark_job_complete',
+                                   provide_context=True,
+                                   python_callable=trashman.mark_job_complete,
+                                   op_args='check_brat_staleness',
+                                   dag=dag
+                                   )
 
 subject = "Airflow Trashman: Brat Stale Notes Report"
 content = """
@@ -58,4 +65,4 @@ redrive_jobs = PythonOperator(task_id='redrive_jobs',
                               python_callable=trashman.redrive_jobs,
                               dag=dag)
 
-generate_job_id >> check_brat_staleness >> report_stale_brat_jobs >> send_stale_brat_email
+generate_job_id >> check_brat_staleness >> report_stale_brat_jobs >> [mark_job_complete, send_stale_brat_email]

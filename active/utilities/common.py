@@ -168,7 +168,7 @@ def save_json_annotation(hdcorcablobid, hdcpupdatedate, json_annotation, annotat
     tgt_insert_stmt = ("INSERT INTO annotations "
                       "(HDCOrcaBlobID, HDCPUpdateDate, category, date_created, date_modified, annotation) "
                       "VALUES (%s, %s, %s, %s, %s, %s)")
-    job_start_date = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
+    job_start_date = datetime.now().strftime(DT_FORMAT)[:-3]
     print("new annotation added: BlobId {}, HDCPUpdateDate {}: annotation_type {}, job_start_date {}".format(
         hdcorcablobid, hdcpupdatedate, annotation_type, job_start_date))
 
@@ -197,7 +197,7 @@ def log_error_and_failure_for_ner_job(run_id, blobid, hdcpupdatedate, message, s
     _log_failure(run_id, blobid, hdcpupdatedate, message, state, tgt_update_stmt)
 
 def _log_failure(run_id, blobid, hdcpupdatedate, message, state, update_stmt):
-    time_of_error = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
+    time_of_error = datetime.now().strftime(DT_FORMAT)[:-3]
     log_error_message(blobid=blobid, hdcpupdatedate=hdcpupdatedate, state=state,
                       time=time_of_error,
                       error_message=message)
@@ -348,4 +348,7 @@ def get_last_run_id(run_table_name, run_id_name):
  
 def get_default_keyname(blobid, prefix):
     return '{prefix}/{id}.json'.format(prefix=prefix, id=blobid)
+
+def generate_timestamp():
+    return datetime.now().strftime(DT_FORMAT)[:-3]
 

@@ -2,6 +2,7 @@ from .generate_job_id import generate_job_id
 from .check_brat_staleness import check_brat_staleness
 from .check_resynth_tasks import check_resynth_tasks
 from .generate_email_operator import generate_email_operator
+from .mark_job_complete import mark_job_complete
 from .redrive_jobs import redrive_jobs, _redrive_brat_stale_task
 from .remove_complete_brat_jobs import remove_complete_brat_jobs
 from .report_stale_brat_jobs import report_stale_brat_jobs
