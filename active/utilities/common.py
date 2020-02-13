@@ -80,6 +80,7 @@ __flask_blob_nlp_http_hook = {"PROD": HttpHook(http_conn_id='fh-nlp-api-flask-bl
 
 STAGE = Variable.get("NLP_ENVIRON")
 BRAT_DEFAULT_ASSIGNEE = "ALL_USERS"
+DEFAULT_EMAIL_TGT = "nlp@fredhutch.org"
 BRAT_ASSIGNEE = Variable.get("BRAT_CONFIG", deserialize_json=True)["BRAT_ASSIGNEE"]
 MAX_BATCH_SIZE = Variable.get("MAX_BATCH_SIZE", 3)
 os.environ['OS_AUTH_URL'] =  Variable.get('OS_AUTH_URL')

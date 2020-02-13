@@ -2,7 +2,6 @@ import json
 from datetime import datetime, timedelta
 import utilities.job_states as job_states
 import utilities.common as common
-from operators.trashman import REDRIVE_TASK_FN
 
 
 def remove_complete_brat_jobs(upstream_task, **kwargs):
