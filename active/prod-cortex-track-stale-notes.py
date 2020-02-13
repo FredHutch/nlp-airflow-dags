@@ -6,7 +6,7 @@ import base64
 from airflow.hooks import HttpHook, MsSqlHook, PostgresHook
 from airflow.contrib.hooks.ssh_hook import SSHHook
 from airflow.operators.python_operator import PythonOperator
-from utilities.common import JOB_RUNNING, JOB_COMPLETE, JOB_FAILURE, REVIEW_BYPASSED_ANNOTATION_TYPE, BRAT_REVIEWED_ANNOTATION_TYPE
+from utilities.job_states import JOB_RUNNING, JOB_COMPLETE, JOB_FAILURE, REVIEW_BYPASSED_ANNOTATION_TYPE, BRAT_REVIEWED_ANNOTATION_TYPE
 from airflow.models import DAG
 import operators.trashman as trashman
 
