@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta
+from collections import defaultdict
 import json
 import subprocess
 import base64
@@ -254,6 +255,7 @@ def annotate_clinical_notes(**kwargs):
                 record['annotated_note'] = json.loads(resp.content)
                 annotation_status = JOB_COMPLETE
                 batch_records[blobid] = record
+
             except Exception as e:
                 common.log_error_and_failure_for_deid_note_job(run_id, blobid, hdcpupdatedate, e, "Flask DeID API")
                 continue
@@ -268,11 +270,15 @@ def annotate_clinical_notes(**kwargs):
             save_note_to_temp_storage(blobid, hdcpupdatedate, note_metadata)
             save_person_info_to_temp_storage(blobid, hdcpupdatedate, patient_data)
 
-        datefolder = hdcpupdatedate.strftime('%Y-%m-%d')
-
         to_review, skip_review = split_records_by_review_status(batch_records)
-        send_notes_to_brat(clinical_notes=to_review, datefolder=datefolder)
-        save_deid_annotations(to_review)
+
+        assignment = _divide_tasks(to_review, common.BRAT_ASSIGNEE)
+
+        for assignee, to_review_by_assignee in assignment.items():
+            send_notes_to_brat(clinical_notes=to_review_by_assignee,
+                               datafolder='{assignee}/{date}'.format(assignee=assignee, date=hdcpupdatedate.strftime('%Y-%m-%d')))
+            save_deid_annotations(to_review_by_assignee)
+
         save_unreviewed_annotations(skip_review)
 
     tgt_update_stmt = "UPDATE af_runs SET job_end = %s, job_status = %s WHERE af_runs_id = %s"
@@ -309,6 +315,22 @@ def _review_criterion(record):
 
     return False
 
+def _divide_tasks(records, assignees):
+    """
+    split list into n parts of approximately equal length
+    :return: defaultdict(dict, {assignee: blobs json})
+    """
+
+    if not assignees:
+        print('No brat assignees were found, assigning to "ALL USERS" by default')
+        return {common.BRAT_DEFAULT_ASSIGNEE: records}
+    i=0
+    split_dicts = defaultdict(dict)
+    for k,v in records.items():
+        split_dicts[assignees[i%len(assignees)]][k] = v
+        i+=1
+
+    return split_dicts
 
 generate_job_id = \
     PythonOperator(task_id='generate_job_id',

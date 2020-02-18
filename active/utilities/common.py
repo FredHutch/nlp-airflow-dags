@@ -79,9 +79,9 @@ __flask_blob_nlp_http_hook = {"PROD": HttpHook(http_conn_id='fh-nlp-api-flask-bl
                               }
 
 STAGE = Variable.get("NLP_ENVIRON")
-BRAT_DEFAULT_ASSIGNEE = "ALL_USERS"
 DEFAULT_EMAIL_TGT = "nlp@fredhutch.org"
 BRAT_ASSIGNEE = Variable.get("BRAT_CONFIG", deserialize_json=True)["BRAT_ASSIGNEE"]
+BRAT_DEFAULT_ASSIGNEE = "ALL_USERS"
 MAX_BATCH_SIZE = Variable.get("MAX_BATCH_SIZE", 3)
 os.environ['OS_AUTH_URL'] =  Variable.get('OS_AUTH_URL')
 os.environ['OS_PASSWORD'] = Variable.get('OS_PASSWORD')
@@ -207,7 +207,9 @@ def _log_failure(run_id, blobid, hdcpupdatedate, message, state, update_stmt):
 
 
 def get_original_note_by_blobid(blobid):
-    src_select_stmt = "SELECT BLOB_CONTENTS FROM vClinicalNoteDiscovery WHERE HDCPUpdateDate = %s"
+    src_select_stmt = "SELECT BLOB_CONTENTS " \
+                      "FROM vClinicalNoteDiscovery " \
+                      "WHERE HDCOrcaBlobID = %s"
     results = SOURCE_NOTE_DB.get_first(src_select_stmt, parameters=(blobid,))
 
     #return blob_contents [0] from returned row
