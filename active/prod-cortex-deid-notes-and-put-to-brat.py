@@ -13,12 +13,13 @@ from utilities.job_states import JOB_RUNNING, JOB_COMPLETE, JOB_FAILURE, BRAT_PE
 args = {
     'owner': 'wchau',
     'depends_on_past': False,
-    'start_date': datetime.now(),
+    'start_date': datetime(2019,1,1),
     'retries': 1,
     'retry_delay': timedelta(minutes=5),
 }
 
 dag = DAG(dag_id='prod-cortex-deid-notes-and-put-to-brat',
+          catchup=False,
           default_args=args,
           dagrun_timeout=timedelta(seconds=30))
 
@@ -27,10 +28,11 @@ def generate_job_id(**kwargs):
     # get last update date from last completed run
     tgt_select_stmt = "SELECT max(source_last_update_date) FROM af_runs WHERE job_status = %s"
     update_date_from_last_run = common.AIRFLOW_NLP_DB.get_first(tgt_select_stmt, parameters=(JOB_COMPLETE,))[0]
-
+    print("last updatedate was {}".format(update_date_from_last_run))
     if update_date_from_last_run is None:
         # first run
         update_date_from_last_run = common.EPOCH
+        print("no updatedate found. falling back on epoch of {}".format(update_date_from_last_run))
     tgt_select_stmt = "SELECT max(af_runs_id) FROM af_runs"
     last_run_id = (common.AIRFLOW_NLP_DB.get_first(tgt_select_stmt)[0] or 0)
     new_run_id = last_run_id + 1

@@ -1,7 +1,7 @@
 import json
 import os
 from contextlib import closing
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from airflow.hooks.http_hook import HttpHook
 from airflow.hooks.mssql_hook import MsSqlHook
@@ -110,7 +110,7 @@ ANNOTATION_PREFIX = __annotations_prefix_dict[STORAGE][STAGE]
 BLOB_PROCESS_PREFIX = __blob_process_prefix_dict[STORAGE][STAGE]
 
 #threshold for af4
-STALE_THRESHOLD = Variable.get("STALE_THRESHOLD", 1)
+STALE_THRESHOLD = timedelta(days=Variable.get("STALE_THRESHOLD", 1))
 
 
 #the default 'beginning time' for any date-based choosing strategies
@@ -134,15 +134,10 @@ def __set_autocommit_on_db_hook(hook):
     with closing(hook.get_conn()) as conn:
         hook.set_autocommit(conn, True)
 
-#Set autocommit = TRUE for all of our writeable DB hooks,
-# since we do not stage our commits
-__set_autocommit_on_db_hook(ERROR_DB)
 __set_autocommit_on_db_hook(AIRFLOW_NLP_DB)
-__set_autocommit_on_db_hook(ANNOTATIONS_DB)
-
 
 def log_error_message(blobid, hdcpupdatedate, state, time, error_message):
-    tgt_insert_stmt = ("INSERT INTO af_errors (HDCOrcaBlobID, state, datetime, message, HDCPUpdateDate)"
+    tgt_insert_stmt = ("INSERT INTO af_errors (HDCOrcaBlobID, state, datetime, message, HDCPUpdateDate) "
                        "VALUES (%s, %s, %s, %s, %s)")
     #print error_message here since we're doing it on every call already
     if type(error_message) is not str:

@@ -1,4 +1,5 @@
 from .generate_job_id import generate_job_id
+from .check_brat_completeness import check_brat_completeness
 from .check_brat_staleness import check_brat_staleness
 from .check_resynth_tasks import check_resynth_tasks
 from .generate_email_operator import generate_email_operator
