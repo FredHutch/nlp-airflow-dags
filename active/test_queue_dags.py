@@ -14,17 +14,20 @@ DAG_NAME ='test-queue-dags'
 args = {
     'owner': 'whiteau',
     'depends_on_past': False,
-    'start_date': datetime.now(),
+    'start_date': datetime(2019,1,1), #this is a best practice according to Airflow: setting it to datetime.now() delays the start until the first period is up.
     'retries': 1,
     'retry_delay': timedelta(minutes=5),
 }
 
 dag = DAG(dag_id=DAG_NAME,
+          catchup=False, #this keeps the dag from backfilling, which it will do between our startdate and 'now' unless we specify this.
 	      default_args=args,
 	      dagrun_timeout=timedelta(seconds=30))
 
 def enqueue(upstream_task, **kwargs):
-  upstream_task = kwargs['upstream_task']
+  #upstream_task = kwargs['upstream_task']
+  #This looks like you pulled this from me; it is wrong!
+  #we can either pass the name of the upstream task id as an op_arg or a op_kwarg, but we don't need both!
   (run_id, date_stamp) = kwargs['ti'].xcom_pull(task_ids=upstream_task)
   run_id = run_id + '88888' # so i can see this sifting through the queue
   exec_stmt = ("EXEC dbo.sp_requeue_note_id 'dbo.clinical_notes_process_queue', %s, %s")
@@ -39,6 +42,7 @@ def dequeue(**kwargs):
 enqueue = PythonOperator(task_id='enqueue',
 	                             provide_context=True,
 	                             python_callable=enqueue,
+                                 op_args={'dequeue'}, #This is how you pass in the name of the task_id as a positional param into enqueue
 	                             dag=dag)
 
 dequeue = PythonOperator(task_id='dequeue',
