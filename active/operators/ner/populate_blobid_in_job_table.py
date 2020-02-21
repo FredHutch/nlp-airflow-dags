@@ -1,8 +1,8 @@
 from datetime import datetime
 
-import utilities.common as common
+import utilities.common_hooks as common_hooks
+import utilities.common_variables as common_variables
 import utilities.job_states as job_states
-
 
 def populate_blobid_in_job_table(**kwargs):
     # get last update date
@@ -19,7 +19,7 @@ def populate_blobid_in_job_table(**kwargs):
     screen_complete_stmt = "SELECT hdcorcablobid, hdcpupdatedate, ner_date " \
                            "FROM af_ner_runs_details  " \
                            "WHERE ner_status = %s"
-    complete_job_rows = common.AIRFLOW_NLP_DB.get_records(screen_complete_stmt, parameters=(job_states.JOB_COMPLETE,))
+    complete_job_rows = common_hooks.AIRFLOW_NLP_DB.get_records(screen_complete_stmt, parameters=(job_states.JOB_COMPLETE,))
     print('complete_job_rows, ', complete_job_rows)
     complete_jobs = {(row[0], row[1]): row[2] for row in complete_job_rows}
 
@@ -30,7 +30,7 @@ def populate_blobid_in_job_table(**kwargs):
     jobs_list = []
     for resynthdate in resynthdates:
         print('resynth_date: ', resynthdate)
-        for row in common.AIRFLOW_NLP_DB.get_records(src_select_stmt, parameters=(resynthdate, job_states.JOB_COMPLETE,)):
+        for row in common_hooks.AIRFLOW_NLP_DB.get_records(src_select_stmt, parameters=(resynthdate, job_states.JOB_COMPLETE,)):
             print('resyn records: ', row)
             blob_id = row[0]
             hdcpupdatedate = row[1]
@@ -40,9 +40,9 @@ def populate_blobid_in_job_table(**kwargs):
                 continue
 
             print("Inserting new note job for blobid {}:{}".format(blob_id, hdcpupdatedate))
-            common.AIRFLOW_NLP_DB.run(tgt_insert_stmt, parameters=(run_id, hdcpupdatedate, blob_id,
+            common_hooks.AIRFLOW_NLP_DB.run(tgt_insert_stmt, parameters=(run_id, hdcpupdatedate, blob_id,
                                                                    resynthdate, job_states.JOB_RUNNING,
-                                                                   datetime.now().strftime(common.DT_FORMAT)[:-3]))
+                                                                   datetime.now().strftime(common_variables.DT_FORMAT)[:-3]))
             jobs_list.append((run_id, resynthdate, blob_id, hdcpupdatedate))
 
     return jobs_list

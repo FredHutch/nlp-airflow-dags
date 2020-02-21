@@ -4,7 +4,9 @@ import subprocess
 
 from airflow.operators.python_operator import PythonOperator
 from airflow.models import DAG
-import utilities.common as common
+import utilities.common_hooks as common_hooks
+import utilities.common_variables as common_variables
+import utilities.common_functions as common_functions
 from utilities.job_states import BRAT_PENDING, BRAT_READY_TO_EXTRACT, BRAT_COMPLETE
 
 REVIEW_NOTES_COL = {'BRAT_ID': 0, 'DIR_LOCATION': 1, 'JOB_STATUS': 2, 'HDCPUPDATEDATE': 3, 'HDCORCABLOBID': 4}
@@ -26,10 +28,10 @@ def scan_and_update_notes_for_completion(**kwargs):
 
     # specifying it as a literal regex gets airflows ssh cmd recognize the wildcards in the filepath.
     remote_command = r'egrep -l "^T[0-9]+[[:space:]]+.*REVIEW_COMPLETE" {location}/*/*.ann'.format(
-        location=common.BRAT_NLP_FILEPATH)
+        location=common_hooks.BRAT_NLP_FILEPATH)
 
     complete_list = subprocess.getoutput(
-        "ssh {}@{} {}".format(common.BRAT_SSH_HOOK.username, common.BRAT_SSH_HOOK.remote_host, remote_command))
+        "ssh {}@{} {}".format(common_hooks.BRAT_SSH_HOOK.username, common_hooks.BRAT_SSH_HOOK.remote_host, remote_command))
 
     full_paths = []
     for completed_annotation in complete_list.splitlines():
@@ -43,7 +45,7 @@ def scan_and_update_notes_for_completion(**kwargs):
 
 def _update_job_status_by_directory_loc(directory_locations):
     print("{} notes to be updated for Extraction".format(len(directory_locations)))
-    update_time = datetime.now().strftime(common.DT_FORMAT)[:-3]
+    update_time = datetime.now().strftime(common_variables.DT_FORMAT)[:-3]
     sql_quote_escapes_locations = "'" + "','".join(directory_locations) + "'"
     tgt_update_stmt = """
                       UPDATE brat_review_status 
@@ -55,7 +57,7 @@ def _update_job_status_by_directory_loc(directory_locations):
                                  review_status=BRAT_PENDING,
                                  locations=sql_quote_escapes_locations)
 
-    common.AIRFLOW_NLP_DB.run(tgt_update_stmt)
+    common_hooks.AIRFLOW_NLP_DB.run(tgt_update_stmt)
 
     return
 
@@ -68,9 +70,9 @@ def _get_notes(status, ids_only=False):
                       WHERE job_status like '{status}'
                       """.format(status=status)
 
-    job_start_date = datetime.now().strftime(common.DT_FORMAT)[:-3]
+    job_start_date = datetime.now().strftime(common_variables.DT_FORMAT)[:-3]
     hdcpupdatedates = []
-    for row in common.AIRFLOW_NLP_DB.get_records(src_select_stmt):
+    for row in common_hooks.AIRFLOW_NLP_DB.get_records(src_select_stmt):
         if ids_only:
             hdcpupdatedates.append(row[0])
         else:
@@ -91,7 +93,7 @@ def _get_note_by_brat_id(brat_id):
                           """.format(brat_id=brat_id)
 
     # make the assumption that this will always return a unique record
-    return common.AIRFLOW_NLP_DB.get_records(src_select_stmt)[0]
+    return common_hooks.AIRFLOW_NLP_DB.get_records(src_select_stmt)[0]
 
 
 def _scan_note_for_completion(review_note):
@@ -102,20 +104,20 @@ def _scan_note_for_completion(review_note):
           """.format(location=dir_location)
     remote_command = "{} && echo 'found'".format(cmd)
     is_complete = subprocess.getoutput(
-        "ssh {}@{} {}".format(common.BRAT_SSH_HOOK.username, common.BRAT_SSH_HOOK.remote_host, remote_command))
+        "ssh {}@{} {}".format(common_hooks.BRAT_SSH_HOOK.username, common_hooks.BRAT_SSH_HOOK.remote_host, remote_command))
 
     return is_complete != 'found'
 
 
 def _update_note_status(brat_id, hdcpupdatedate, job_status):
-    update_time = datetime.now().strftime(common.DT_FORMAT)[:-3]
+    update_time = datetime.now().strftime(common_variables.DT_FORMAT)[:-3]
     tgt_update_stmt = """
             UPDATE brat_review_status 
             SET job_status = %s, last_update_date = %s 
             WHERE brat_id in (%s) AND hdcpupdatedate = %s
             """
 
-    common.AIRFLOW_NLP_DB.run(tgt_update_stmt, parameters=(job_status, update_time, brat_id, hdcpupdatedate))
+    common_hooks.AIRFLOW_NLP_DB.run(tgt_update_stmt, parameters=(job_status, update_time, brat_id, hdcpupdatedate))
 
     return
 
@@ -132,8 +134,8 @@ def save_and_mark_completed_note(**kwargs):
             _mark_review_completed(extraction_note[REVIEW_NOTES_COL['BRAT_ID']],
                                    extraction_note[REVIEW_NOTES_COL['HDCPUPDATEDATE']])
         except Exception as e:
-            time_of_error = datetime.now().strftime(common.DT_FORMAT)[:-3]
-            common.log_error_message(blobid=extraction_note[REVIEW_NOTES_COL['HDCORCABLOBID']],
+            time_of_error = datetime.now().strftime(common_variables.DT_FORMAT)[:-3]
+            common_functions.log_error_message(blobid=extraction_note[REVIEW_NOTES_COL['HDCORCABLOBID']],
                                      hdcpupdatedate=extraction_note[REVIEW_NOTES_COL['HDCPUPDATEDATE']],
                                      state="Extract Review Complete Note",
                                      time=time_of_error,
@@ -149,7 +151,7 @@ def _translate_and_save_note(note_uid, hdcpupdatedate, ann_annotation):
         print("Exception occurred: {}".format(e))
         raise e
 
-    common.save_brat_reviewed_annotation(note_uid, hdcpupdatedate, str(json_annotation))
+    common_functions.save_brat_reviewed_annotation(note_uid, hdcpupdatedate, str(json_annotation))
 
     return json_annotation
 
@@ -172,7 +174,7 @@ def _translate_ann_to_json(ann_annotation):
 def _get_note_from_brat(note_location):
     remote_command = 'cat {annotation_location}'.format(annotation_location=note_location)
     reviewed_annotation_output = subprocess.getoutput(
-        "ssh {}@{} {}".format(common.BRAT_SSH_HOOK.username, common.BRAT_SSH_HOOK.remote_host, remote_command))
+        "ssh {}@{} {}".format(common_hooks.BRAT_SSH_HOOK.username, common_hooks.BRAT_SSH_HOOK.remote_host, remote_command))
 
     return reviewed_annotation_output
 
