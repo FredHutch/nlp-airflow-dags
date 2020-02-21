@@ -18,3 +18,43 @@ STALE_THRESHOLD = timedelta(days=Variable.get("STALE_THRESHOLD", 1))
 #the default 'beginning time' for any date-based choosing strategies
 DT_FORMAT = "%Y-%m-%d %H:%M:%S.%f"
 EPOCH = Variable.get("EPOCH", datetime(1970, 1, 1).strftime(DT_FORMAT)[:-3])
+
+############
+#JOB STATES#
+############
+JOB_RUNNING = 'scheduled'
+JOB_COMPLETE = 'completed'
+JOB_FAILURE = 'failed'
+
+## Brat Specific
+BRAT_PENDING = 'PENDING REVIEW'
+BRAT_READY_TO_EXTRACT = "EXTRACTION READY"
+BRAT_COMPLETE = "REVIEW COMPLETE"
+
+#Annotation Codes
+BRAT_REVIEWED_ANNOTATION_TYPE = 'BRAT REVIEWED ANNOTATION'
+REVIEW_BYPASSED_ANNOTATION_TYPE = 'REVIEW BYPASSED'
+DEID_ANNOTATION_TYPE = 'DEID ANNOTATIONS'
+RESYNTH_ANNOTATION_TYPE = 'RESYNTHESIZED ANNOTATIONS'
+
+## NLP task related
+NLP_NER_PENDING = "NER Pending"
+NLP_NER_COMPLETE = "NER Complete"
+NLP_NER_FAILED = "NER Failed"
+
+
+################
+#Trashman Vars #
+################
+REDRIVE_RUNS_TABLE = "af_trashman_runs"
+REDRIVE_JOBS_TABLE = "af_trashman_runs_details"
+REDRIVE_STALE_BRAT_TABLE = "af_trashman_stale_brat_jobs"
+REDRIVE_COMPLETE_BRAT_TABLE = "af_trashman_complete_brat_jobs"
+REDRIVE_RUN_ID = "af_trashman_runs_id"
+REDRIVE_SOURCE_BRAT_TABLE = "brat_review_status"
+
+REDRIVE_TASK_FN = {
+    'BRAT_STALE': True,
+    'RESYNTH': True,
+    'DEID': True
+}

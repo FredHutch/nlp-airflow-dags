@@ -1,9 +1,6 @@
 import json
 from datetime import datetime, timedelta
-import utilities.job_states as job_states
 import utilities.common_variables as common_variables
-from operators.trashman.common_vars import REDRIVE_RUNS_TABLE, REDRIVE_RUN_ID
-
 
 def report_stale_brat_jobs(upstream_task, **kwargs):
     STALE_BRAT_EMAIL_PREAMBLE = \

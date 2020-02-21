@@ -1,6 +1,5 @@
 from datetime import datetime
 
-import utilities.job_states as job_states
 import utilities.common_variables as common_variables
 import utilities.common_hooks as common_hooks
 from airflow.operators.python_operator import PythonOperator
@@ -27,7 +26,7 @@ def generate_job_id(**kwargs):
     job_start_date = datetime.now().strftime(common_variables.DT_FORMAT)[:-3]
     resynthdates = []
 
-    blob_job_queue = _get_blobs_since_date(date=last_ner_update_date, state=job_states.JOB_COMPLETE)
+    blob_job_queue = _get_blobs_since_date(date=last_ner_update_date, state=common_variables.JOB_COMPLETE)
 
     if blob_job_queue is None:
         print("No new records found since last update date: {}".format(last_ner_update_date))
@@ -52,7 +51,7 @@ def _insert_ner_scheduled(run_id, update_date, job_start_date, **kwargs):
                       "(af_ner_runs_id, job_status, job_start, resynth_date) " \
                       "VALUES (%s, %s, %s, %s)"
     common_hooks.AIRFLOW_NLP_DB.run(tgt_insert_stmt,
-                              parameters=(run_id, job_states.JOB_RUNNING, job_start_date, update_date))
+                              parameters=(run_id, common_variables.JOB_RUNNING, job_start_date, update_date))
 
     return
 
@@ -81,7 +80,7 @@ def _get_last_ner_update_date(**kwargs):
                       "FROM af_ner_runs " \
                       "WHERE job_status = %s"
     last_ner_update_date = (common_hooks.AIRFLOW_NLP_DB.get_first(tgt_select_stmt,
-                                                            parameters=(job_states.NLP_NER_COMPLETE,)) or (None,))
+                                                            parameters=(common_variables.NLP_NER_COMPLETE,)) or (None,))
 
     return last_ner_update_date[0]
 

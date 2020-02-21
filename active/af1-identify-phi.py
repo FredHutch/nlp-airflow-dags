@@ -9,8 +9,6 @@ from airflow.models import DAG
 import utilities.common_hooks as common_hooks
 import utilities.common_variables as common_variables
 import utilities.common_functions as common_functions
-from utilities.job_states import JOB_RUNNING, JOB_COMPLETE, JOB_FAILURE, BRAT_PENDING
-
 
 args = {
     'owner': 'wchau',
@@ -29,7 +27,7 @@ dag = DAG(dag_id='af1-identify-phi',
 def generate_job_id(**kwargs):
     # get last update date from last completed run
     tgt_select_stmt = "SELECT max(source_last_update_date) FROM af_runs WHERE job_status = %s"
-    update_date_from_last_run = common_hooks.AIRFLOW_NLP_DB.get_first(tgt_select_stmt, parameters=(JOB_COMPLETE,))[0]
+    update_date_from_last_run = common_hooks.AIRFLOW_NLP_DB.get_first(tgt_select_stmt, parameters=(common_variables.JOB_COMPLETE,))[0]
     print("last updatedate was {}".format(update_date_from_last_run))
     if update_date_from_last_run is None:
         # first run
@@ -54,7 +52,7 @@ def generate_job_id(**kwargs):
     total_job_count = common_variables.MAX_BATCH_SIZE
     for row in common_hooks.SOURCE_NOTE_DB.get_records(src_select_stmt, parameters=(update_date_from_last_run,)):
         hdcpupdatedates.append(row[0])
-        common_hooks.AIRFLOW_NLP_DB.run(tgt_insert_stmt, parameters=(new_run_id, row[0], row[1], job_start_date, JOB_RUNNING))
+        common_hooks.AIRFLOW_NLP_DB.run(tgt_insert_stmt, parameters=(new_run_id, row[0], row[1], job_start_date, common_variables.JOB_RUNNING))
         print("Job Batch for hdcpupdatedate: {}  contains {} notes."
               " {} total notes scheduled".format(row[0], row[1], (common_variables.MAX_BATCH_SIZE - total_job_count)))
         total_job_count -= row[1]
@@ -80,7 +78,7 @@ def populate_blobid_in_job_table(**kwargs):
     # get completed jobs so that we do not repeat completed work
     screen_complete_stmt = ("SELECT HDCOrcaBlobId, HDCPUpdateDate, annotation_date from af_runs_details  "
                            "WHERE annotation_status = %s")
-    complete_job_rows = common_hooks.AIRFLOW_NLP_DB.get_records(screen_complete_stmt, parameters=(JOB_COMPLETE,))
+    complete_job_rows = common_hooks.AIRFLOW_NLP_DB.get_records(screen_complete_stmt, parameters=(common_variables.JOB_COMPLETE,))
     complete_jobs = {(row[0], row[1]): row[2] for row in complete_job_rows}
 
     tgt_insert_stmt = ("INSERT INTO af_runs_details (af_runs_id, HDCPUpdateDate, HDCOrcaBlobId, annotation_status) "
@@ -95,7 +93,7 @@ def populate_blobid_in_job_table(**kwargs):
                       "Skipping.".format(row[0], hdcpupdatedate, complete_jobs[(row[0], hdcpupdatedate)]))
                 continue
 
-            common_hooks.AIRFLOW_NLP_DB.run(tgt_insert_stmt, parameters=(run_id, hdcpupdatedate, row[0], JOB_RUNNING))
+            common_hooks.AIRFLOW_NLP_DB.run(tgt_insert_stmt, parameters=(run_id, hdcpupdatedate, row[0], common_variables.JOB_RUNNING))
             total_job_count -= 1
             if total_job_count == 0:
                 print("Job Batch for hdcpupdatedate: {}  contains {} notes"
@@ -184,7 +182,7 @@ def update_brat_db_status(note_id, hdcpupdatedate, directory_location):
 
     job_start_date = datetime.now()
     common_hooks.AIRFLOW_NLP_DB.run(tgt_insert_stmt,
-                              parameters=(note_id, job_start_date, directory_location, job_start_date, BRAT_PENDING,
+                              parameters=(note_id, job_start_date, directory_location, job_start_date, common_variables.BRAT_PENDING,
                                           hdcpupdatedate))
 
 
@@ -232,7 +230,7 @@ def annotate_clinical_notes(**kwargs):
     for hdcpupdatedate in hdcpupdatedates:
         batch_records = {}
         for id_row in common_hooks.AIRFLOW_NLP_DB.get_records(tgt_select_stmt,
-                                                        parameters=(run_id, hdcpupdatedate, JOB_RUNNING)):
+                                                        parameters=(run_id, hdcpupdatedate, common_variables.JOB_RUNNING)):
             blobid = id_row[0]
             note_metadata = common_hooks.get_note_and_metadata_dict_from_source(blobid, hdcpupdatedate)
             patient_data = common_hooks.get_patient_data_from_source(note_metadata["patient_id"])
@@ -257,7 +255,7 @@ def annotate_clinical_notes(**kwargs):
                 resp = common_hooks.DEID_NLP_API_HOOK.run("/deid/annotate", data=json.dumps(record['original_note']),
                                     headers={"Content-Type": "application/json"})
                 record['annotated_note'] = json.loads(resp.content)
-                annotation_status = JOB_COMPLETE
+                annotation_status = common_variables.JOB_COMPLETE
                 batch_records[blobid] = record
 
             except Exception as e:
@@ -286,7 +284,7 @@ def annotate_clinical_notes(**kwargs):
         save_unreviewed_annotations(skip_review)
 
     tgt_update_stmt = "UPDATE af_runs SET job_end = %s, job_status = %s WHERE af_runs_id = %s"
-    common_hooks.AIRFLOW_NLP_DB.run(tgt_update_stmt, parameters=(datetime.now(), JOB_COMPLETE, run_id))
+    common_hooks.AIRFLOW_NLP_DB.run(tgt_update_stmt, parameters=(datetime.now(), common_variables.JOB_COMPLETE, run_id))
 
 
 def save_deid_annotations(annotation_records):

@@ -7,7 +7,6 @@ from airflow.models import DAG
 import utilities.common_hooks as common_hooks
 import utilities.common_variables as common_variables
 import utilities.common_functions as common_functions
-from utilities.job_states import BRAT_PENDING, BRAT_READY_TO_EXTRACT, BRAT_COMPLETE
 
 REVIEW_NOTES_COL = {'BRAT_ID': 0, 'DIR_LOCATION': 1, 'JOB_STATUS': 2, 'HDCPUPDATEDATE': 3, 'HDCORCABLOBID': 4}
 
@@ -52,9 +51,9 @@ def _update_job_status_by_directory_loc(directory_locations):
                       SET job_status = '{extract_status}', last_update_date = '{date}' 
                       WHERE job_status like '{review_status}'
                       AND directory_location in ({locations})
-                      """.format(extract_status=BRAT_READY_TO_EXTRACT,
+                      """.format(extract_status=common_variables.BRAT_READY_TO_EXTRACT,
                                  date=update_time,
-                                 review_status=BRAT_PENDING,
+                                 review_status=common_variables.BRAT_PENDING,
                                  locations=sql_quote_escapes_locations)
 
     common_hooks.AIRFLOW_NLP_DB.run(tgt_update_stmt)
@@ -123,7 +122,7 @@ def _update_note_status(brat_id, hdcpupdatedate, job_status):
 
 
 def save_and_mark_completed_note(**kwargs):
-    extraction_notes = _get_notes(BRAT_READY_TO_EXTRACT)
+    extraction_notes = _get_notes(common_variables.BRAT_READY_TO_EXTRACT)
 
     for extraction_note in extraction_notes:
         reviewed_notation = _get_note_from_brat(extraction_note[REVIEW_NOTES_COL['DIR_LOCATION']])
@@ -180,7 +179,7 @@ def _get_note_from_brat(note_location):
 
 
 def _mark_review_completed(brat_id, hdcpupdatedate):
-    return _update_note_status(brat_id, hdcpupdatedate, BRAT_COMPLETE)
+    return _update_note_status(brat_id, hdcpupdatedate, common_variables.BRAT_COMPLETE)
 
 
 scan_and_update_notes_for_completion = \

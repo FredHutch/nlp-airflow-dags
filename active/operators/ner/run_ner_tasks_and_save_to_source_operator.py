@@ -3,7 +3,7 @@ from datetime import datetime
 
 import utilities.common_hooks as common_hooks
 import utilities.common_functions as common_functions
-import utilities.job_states as job_states
+import utilities.common_variables as common_variables
 
 import utilities.flask_blob_nlp as flask_blob_nlp
 
@@ -23,13 +23,13 @@ def run_ner_task(**kwargs):
 
         if preprocessing_results is None:
             print("No NER preprocessing results returned for id: {id}. Failing note and Continuing".format(id=blobid))
-            _update_ner_run_details(run_id, blobid, hdcpupdatedate, state=job_states.NLP_NER_FAILED)
+            _update_ner_run_details(run_id, blobid, hdcpupdatedate, state=common_variables.NLP_NER_FAILED)
             continue
 
         if sectionerx_results is None:
             print(
                 "No NER sectionerx results returned for id: {id}. Failing note and Continuing".format(id=blobid))
-            _update_ner_run_details(run_id, blobid, hdcpupdatedate, state=job_states.NLP_NER_FAILED)
+            _update_ner_run_details(run_id, blobid, hdcpupdatedate, state=common_variables.NLP_NER_FAILED)
             continue
 
         results = {}
@@ -52,8 +52,8 @@ def run_ner_task(**kwargs):
                                     payload=json_obj_to_store,
                                     key=common_functions.get_default_keyname(blobid, prefix=common_hooks.BLOB_PROCESS_PREFIX),
                                     connection=common_hooks.MYSTOR)
-            _update_ner_run_details(run_id, blobid, hdcpupdatedate, state=job_states.NLP_NER_COMPLETE)
-            _update_ner_runs(run_id, state=job_states.NLP_NER_COMPLETE)
+            _update_ner_run_details(run_id, blobid, hdcpupdatedate, state=common_variables.NLP_NER_COMPLETE)
+            _update_ner_runs(run_id, state=common_variables.NLP_NER_COMPLETE)
 
         except Exception as e:
             message = "Exception occurred: {}".format(e)
@@ -84,7 +84,7 @@ def _get_ner_run_details_id_by_resynth_date(run_id, date):
                       "AND resynth_date = %s " \
                       "AND ner_status = %s"
 
-    return common_hooks.AIRFLOW_NLP_DB.get_records(tgt_select_stmt, parameters=(run_id, date, job_states.JOB_RUNNING))
+    return common_hooks.AIRFLOW_NLP_DB.get_records(tgt_select_stmt, parameters=(run_id, date, common_variables.JOB_RUNNING))
 
 def _update_ner_runs(run_id, state):
     tgt_update_stmt = "UPDATE af_ner_runs SET job_end = %s, job_status = %s WHERE af_ner_runs_id = %s"
@@ -92,4 +92,4 @@ def _update_ner_runs(run_id, state):
 
 def _update_job_id_as_failed(run_id):
     tgt_update_stmt = "UPDATE af_ner_runs SET job_end = %s, job_status = %s WHERE af_ner_runs_id = %s"
-    common_hooks.AIRFLOW_NLP_DB.run(tgt_update_stmt, parameters=(datetime.now(), job_states.NLP_NER_FAILED, run_id), autocommit=True)
+    common_hooks.AIRFLOW_NLP_DB.run(tgt_update_stmt, parameters=(datetime.now(), common_variables.NLP_NER_FAILED, run_id), autocommit=True)

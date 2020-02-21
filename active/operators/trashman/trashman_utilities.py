@@ -2,7 +2,6 @@ import utilities.common_variables as common_variables
 import utilities.common_functions as common_functions
 from datetime import datetime, timedelta
 
-
 def compare_dates(brat_files, stale_threshold=common_variables.STALE_THRESHOLD):
     """
     Compares dates with predefined airflow threshold (days)

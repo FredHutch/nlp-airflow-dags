@@ -2,11 +2,9 @@ from datetime import datetime, timedelta
 import json
 import subprocess
 import base64
-
 from airflow.hooks import HttpHook, MsSqlHook, PostgresHook
 from airflow.contrib.hooks.ssh_hook import SSHHook
 from airflow.operators.python_operator import PythonOperator
-from utilities.job_states import JOB_RUNNING, JOB_COMPLETE, JOB_FAILURE, REVIEW_BYPASSED_ANNOTATION_TYPE, BRAT_REVIEWED_ANNOTATION_TYPE
 from airflow.models import DAG
 from airflow.utils.trigger_rule import TriggerRule
 import operators.trashman as trashman

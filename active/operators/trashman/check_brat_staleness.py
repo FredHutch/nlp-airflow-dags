@@ -8,7 +8,6 @@ import utilities.common_variables as common_variables
 import utilities.job_states as job_states
 from operators.trashman import trashman_utilities
 from airflow.operators.email_operator import EmailOperator
-from operators.trashman.common_vars import REDRIVE_RUN_ID, REDRIVE_STALE_BRAT_TABLE
 
 
 def check_brat_staleness(upstream_task, **kwargs):
@@ -46,7 +45,7 @@ def write_run_details(run_id, check_date, brat_files, stale_threshold=common_var
     """
     tgt_insert_stmt = ("INSERT INTO {job_table} "
                        "({run_id}, stale_threshold_days, stale_check_date, directory_location, last_modified_date, job_status) "
-                       "VALUES (%s, %s, %s, %s, %s, %s)".format(job_table=REDRIVE_STALE_BRAT_TABLE, run_id=REDRIVE_RUN_ID))
+                       "VALUES (%s, %s, %s, %s, %s, %s)".format(job_table=common_variables.REDRIVE_STALE_BRAT_TABLE, run_id=common_variables.REDRIVE_RUN_ID))
     brat_capacity = len(brat_files)
     #get count of stale v. nonstale in current run
     stale_count = sum(d.get('IsStale') for d in brat_files)

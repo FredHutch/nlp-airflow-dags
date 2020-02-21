@@ -7,8 +7,6 @@ from airflow.models import DAG
 import utilities.common_hooks as common_hooks
 import utilities.common_variables as common_variables
 import utilities.common_functions as common_functions
-from utilities.job_states import JOB_RUNNING, JOB_COMPLETE, JOB_FAILURE, \
-    REVIEW_BYPASSED_ANNOTATION_TYPE, BRAT_REVIEWED_ANNOTATION_TYPE
 
 args = {
     'owner': 'whiteau',
@@ -28,7 +26,7 @@ def _insert_resynth_run_job(run_id, update_date, record_count, job_start_date):
                       "(af_resynth_runs_id, source_last_update_date, record_counts, job_start, job_status) "
                       "VALUES (%s, %s, %s, %s, %s)")
     common_hooks.AIRFLOW_NLP_DB.run(tgt_insert_stmt,
-                              parameters=(run_id, update_date, record_count, job_start_date, JOB_RUNNING))
+                              parameters=(run_id, update_date, record_count, job_start_date, common_variables.JOB_RUNNING))
 
     return
 
@@ -43,8 +41,8 @@ def _get_annotations_since_date(update_date_from_last_run):
 
     return common_hooks.ANNOTATIONS_DB.get_records(src_select_stmt,
                                              parameters=(update_date_from_last_run,
-                                                         BRAT_REVIEWED_ANNOTATION_TYPE,
-                                                         REVIEW_BYPASSED_ANNOTATION_TYPE))
+                                                         common_variables.BRAT_REVIEWED_ANNOTATION_TYPE,
+                                                         common_variables.REVIEW_BYPASSED_ANNOTATION_TYPE))
 
 
 def _get_last_resynth_run_id():
@@ -57,7 +55,7 @@ def _get_last_resynth_run_id():
 def _get_last_resynth_update_date():
     tgt_select_stmt = "SELECT max(source_last_update_date) FROM af_resynthesis_runs WHERE job_status = %s"
     update_date_from_last_run = (common_hooks.AIRFLOW_NLP_DB.get_first(tgt_select_stmt,
-                                                                 parameters=(JOB_COMPLETE,)) or (None,))
+                                                                 parameters=(common_variables.JOB_COMPLETE,)) or (None,))
 
     return update_date_from_last_run[0]
 
@@ -101,7 +99,7 @@ def populate_blobid_in_job_table(**kwargs):
     # get completed jobs so that we do not repeat completed work
     screen_complete_stmt = ("SELECT hdcorcablobid, hdcpupdatedate, resynth_date from af_resynthesis_runs_details  "
                            "WHERE resynth_status = %s")
-    complete_job_rows = common_hooks.AIRFLOW_NLP_DB.get_records(screen_complete_stmt, parameters=(JOB_COMPLETE,))
+    complete_job_rows = common_hooks.AIRFLOW_NLP_DB.get_records(screen_complete_stmt, parameters=(common_variables.JOB_COMPLETE,))
     complete_jobs = {(row[0], row[1]): row[2] for row in complete_job_rows}
 
     tgt_insert_stmt = ("INSERT INTO af_resynthesis_runs_details "
@@ -116,19 +114,19 @@ def populate_blobid_in_job_table(**kwargs):
                 continue
 
             print("Inserting new note job for blobid {}:{}".format(row[0], row[1]))
-            common_hooks.AIRFLOW_NLP_DB.run(tgt_insert_stmt, parameters=(run_id, row[1], row[0], creation_date, JOB_RUNNING))
+            common_hooks.AIRFLOW_NLP_DB.run(tgt_insert_stmt, parameters=(run_id, row[1], row[0], creation_date, common_variables.JOB_RUNNING))
 
 
 def _get_resynth_run_details_id_by_creation_date(run_id, date):
     tgt_select_stmt = ("SELECT hdcorcablobid, hdcpupdatedate FROM af_resynthesis_runs_details "
                       "WHERE af_resynth_runs_id = %s and annotation_creation_date = %s and resynth_status = %s")
 
-    return common_hooks.AIRFLOW_NLP_DB.get_records(tgt_select_stmt, parameters=(run_id, date, JOB_RUNNING))
+    return common_hooks.AIRFLOW_NLP_DB.get_records(tgt_select_stmt, parameters=(run_id, date, common_variables.JOB_RUNNING))
 
 
 def _update_resynth_run_details_to_complete(run_id, blobid, date):
     print("updating blob {} to complete".format(blobid))
-    return _update_resynth_run_details_by_id_and_date(run_id, blobid, date, JOB_COMPLETE)
+    return _update_resynth_run_details_by_id_and_date(run_id, blobid, date, common_variables.JOB_COMPLETE)
 
 
 def _update_resynth_run_details_to_failed(run_id, blobid, date):
@@ -153,8 +151,8 @@ def _get_annotations_by_id_and_created_date(blobid, date):
                       "     OR category = %s)")
 
     return common_hooks.ANNOTATIONS_DB.get_records(src_select_stmt, parameters=(
-                                             date, blobid, REVIEW_BYPASSED_ANNOTATION_TYPE,
-                                             BRAT_REVIEWED_ANNOTATION_TYPE))
+                                             date, blobid, common_variables.REVIEW_BYPASSED_ANNOTATION_TYPE,
+                                             common_variables.BRAT_REVIEWED_ANNOTATION_TYPE))
 
 
 def _call_resynthesis_api(blobid, hdcpupdatedate, deid_note, deid_annotations, deid_alias):
@@ -177,7 +175,7 @@ def _call_resynthesis_api(blobid, hdcpupdatedate, deid_note, deid_annotations, d
 
 def _update_job_id_as_complete(run_id):
     tgt_update_stmt = "UPDATE af_resynthesis_runs SET job_end = %s, job_status = %s WHERE af_resynth_runs_id = %s"
-    common_hooks.AIRFLOW_NLP_DB.run(tgt_update_stmt, parameters=(datetime.now(), JOB_COMPLETE, run_id), autocommit=True)
+    common_hooks.AIRFLOW_NLP_DB.run(tgt_update_stmt, parameters=(datetime.now(), common_variables.JOB_COMPLETE, run_id), autocommit=True)
 
 
 def cast_start_end_as_int(json_data, blobid, hdcpupdatedate):
