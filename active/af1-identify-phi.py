@@ -18,7 +18,7 @@ args = {
     'retry_delay': timedelta(minutes=5),
 }
 
-dag = DAG(dag_id='prod-cortex-deid-notes-and-put-to-brat',
+dag = DAG(dag_id='af1-identify-phi',
           catchup=False,
           default_args=args,
           dagrun_timeout=timedelta(seconds=30))
