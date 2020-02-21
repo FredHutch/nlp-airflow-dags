@@ -17,7 +17,7 @@ args = {
     'retry_delay': timedelta(minutes=5),
 }
 
-dag = DAG(dag_id='prod-cortex-pull-reviewed-notes-from-brat',
+dag = DAG(dag_id='af2-brat-nanny',
           default_args=args,
           dagrun_timeout=timedelta(seconds=30))
 

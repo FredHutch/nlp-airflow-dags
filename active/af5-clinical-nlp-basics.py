@@ -4,7 +4,7 @@ from airflow.operators.python_operator import PythonOperator
 from airflow.models import DAG
 from operators.ner import generate_job_id, populate_blobid_in_job_table, run_ner_task
 
-DAG_NAME = 'prod-cortex-ner-tasks-on-resynthed-notes'
+DAG_NAME = 'af5-clinical-nlp-basics'
 CHILD_DAG_NAME = 'populate_blobid_in_job_table'
 
 args = {

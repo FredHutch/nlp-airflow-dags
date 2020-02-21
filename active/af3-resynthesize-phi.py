@@ -16,7 +16,7 @@ args = {
     'retry_delay': timedelta(minutes=5),
 }
 
-dag = DAG(dag_id='prod-cortex-resynthesis-deid-notes',
+dag = DAG(dag_id='af3-resynthesize-phi',
           default_args=args,
           dagrun_timeout=timedelta(seconds=30))
 

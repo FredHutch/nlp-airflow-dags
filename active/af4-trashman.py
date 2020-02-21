@@ -11,7 +11,7 @@ from airflow.models import DAG
 from airflow.utils.trigger_rule import TriggerRule
 import operators.trashman as trashman
 
-DAG_NAME ='prod-cortex-track-stale-notes'
+DAG_NAME ='af4-trashman'
 
 args = {
     'owner': 'whiteau',
