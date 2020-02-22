@@ -3,119 +3,8 @@ import os
 from contextlib import closing
 from datetime import datetime, timedelta
 
-from airflow.hooks.http_hook import HttpHook
-from airflow.hooks.mssql_hook import MsSqlHook
-from airflow.hooks.postgres_hook import PostgresHook
-from airflow.contrib.hooks.ssh_hook import SSHHook
-from airflow.models import Variable
-from sci.store import swift, s3
-import utilities.job_states as job_states
-
-__error_db_stage_dict = {"PROD": PostgresHook(postgres_conn_id="prod-airflow-nlp-pipeline"),
-                         "DEV": PostgresHook(postgres_conn_id="dev-airflow-nlp-pipeline")
-                         }
-__source_note_db_stage_dict = {"PROD": MsSqlHook(mssql_conn_id="prod_src_notes"),
-                               "DEV": MsSqlHook(mssql_conn_id="dev_src_notes")
-                               }
-__airflow_nlp_db_stage_dict = {"PROD": PostgresHook(postgres_conn_id="prod-airflow-nlp-pipeline"),
-                               "DEV": PostgresHook(postgres_conn_id="dev-airflow-nlp-pipeline")
-                               }
-__annotations_db_stage_dict = {"PROD": MsSqlHook(mssql_conn_id="prod_nlp_annos"),
-                               "DEV": MsSqlHook(mssql_conn_id="dev_nlp_annos")
-                               }
-__brat_ssh_stage_dict = {"PROD": SSHHook(ssh_conn_id="prod-brat"),
-                         "DEV": SSHHook(ssh_conn_id="prod-brat")
-                        }
-__remote_nlp_home_path_dict = {"PROD": "/mnt/encrypted/brat-v1.3_Crunchy_Frog/data/nlp",
-                               "DEV": "/mnt/encrypted/brat-v1.3_Crunchy_Frog/data/nlp"
-                        }
-
-__storage_dict = {'SWIFT':
-                    {"PROD":'Swift__HDC_project_uw-clinic-notes',
-                     "DEV":'AUTH_Swift__HDC'},
-                  'S3':
-                    {"PROD": 'fh-nlp-deid-s3',
-                     "DEV": 'fh-nlp-deid-s3'}
-                 }
-__bucket_dict = {'SWIFT':
-                  {"PROD": "NLP",
-                   "DEV": "NLP"},
-                'S3':
-                    {"PROD": 'fh-nlp-deid',
-                     "DEV": 'fh-nlp-deid'}
-                }
-
-__annotations_prefix_dict = {
-    'SWIFT':
-        {"PROD": "fh-nlp-deid-swift/annotated_note",
-         "DEV": "fh-nlp-deid-swift-dev/annotated_note"},
-    'S3':
-        {"PROD": 'fh-nlp-deid',
-         "DEV": 'fh-nlp-deid'}
-}
-
-__blob_process_prefix_dict = {
-    'SWIFT':
-        {"PROD": "fh-nlp-deid-swift/NER_processed_blobs",
-         "DEV": "fh-nlp-deid-swift-dev/NER_processed_blobs"},
-    'S3':
-        {"PROD": 'fh-nlp-deid',
-         "DEV": 'fh-nlp-deid'}
-}
-__storage_writer = {'SWIFT':swift,
-                    'S3':s3}
-
-__deid_nlp_http_hook = {"PROD": HttpHook(http_conn_id='fh-nlp-api-deid', method='POST'),
-                        "DEV": HttpHook(http_conn_id='fh-nlp-api-deid', method='POST')
-                        }
-__nlp_test_http_hook = {"PROD": HttpHook(http_conn_id='fh-nlp-api-test', method='POST'),
-                        "DEV": HttpHook(http_conn_id='fh-nlp-api-test', method='POST')
-                        }
-__flask_resynth_http_hook = {"PROD": HttpHook(http_conn_id='fh-nlp-api-resynth', method='POST'),
-                        "DEV": HttpHook(http_conn_id='fh-nlp-api-resynth', method='POST')
-                        }
-__flask_blob_nlp_http_hook = {"PROD": HttpHook(http_conn_id='fh-nlp-api-flask-blob-nlp', method='POST'),
-                              "DEV": HttpHook(http_conn_id='fh-nlp-api-flask-blob-nlp', method='POST')
-                              }
-
-STAGE = Variable.get("NLP_ENVIRON")
-DEFAULT_EMAIL_TGT = "nlp@fredhutch.org"
-BRAT_ASSIGNEE = Variable.get("BRAT_CONFIG", deserialize_json=True)["BRAT_ASSIGNEE"]
-BRAT_DEFAULT_ASSIGNEE = "ALL_USERS"
-MAX_BATCH_SIZE = Variable.get("MAX_BATCH_SIZE", 3)
-os.environ['OS_AUTH_URL'] =  Variable.get('OS_AUTH_URL')
-os.environ['OS_PASSWORD'] = Variable.get('OS_PASSWORD')
-os.environ['OS_TENANT_NAME'] = Variable.get('OS_TENANT_NAME')
-os.environ['OS_USERNAME'] = Variable.get('OS_USERNAME')
-
-
-# safety in hardcoding for now - TODO - should eventually be changed to an ENV VAR
-STORAGE = 'SWIFT'
-MYSTOR = __storage_writer[STORAGE](__bucket_dict[STORAGE][STAGE])
-
-ERROR_DB = __error_db_stage_dict[STAGE]
-SOURCE_NOTE_DB = __source_note_db_stage_dict[STAGE]
-AIRFLOW_NLP_DB = __airflow_nlp_db_stage_dict[STAGE]
-ANNOTATIONS_DB = __annotations_db_stage_dict[STAGE]
-DEID_NLP_API_HOOK = __deid_nlp_http_hook[STAGE]
-NLP_API_TEST_HOOK = __nlp_test_http_hook[STAGE]
-FLASK_RESYNTH_NLP_API_HOOK = __flask_resynth_http_hook[STAGE]
-FLASK_BLOB_NLP_API_HOOK = __flask_blob_nlp_http_hook[STAGE]
-BRAT_SSH_HOOK = __brat_ssh_stage_dict[STAGE]
-BRAT_NLP_FILEPATH = __remote_nlp_home_path_dict[STAGE]
-
-OBJ_STORE = __storage_dict[STORAGE][STAGE]
-BUCKET_NAME = __bucket_dict[STORAGE][STAGE]
-ANNOTATION_PREFIX = __annotations_prefix_dict[STORAGE][STAGE]
-BLOB_PROCESS_PREFIX = __blob_process_prefix_dict[STORAGE][STAGE]
-
-#threshold for af4
-STALE_THRESHOLD = timedelta(days=Variable.get("STALE_THRESHOLD", 1))
-
-
-#the default 'beginning time' for any date-based choosing strategies
-DT_FORMAT = "%Y-%m-%d %H:%M:%S.%f"
-EPOCH = Variable.get("EPOCH", datetime(1970, 1, 1).strftime(DT_FORMAT)[:-3])
+from utilities.common_hooks import AIRFLOW_NLP_DB, ERROR_DB, ANNOTATIONS_DB, SOURCE_NOTE_DB
+from utilities.common_variables import DT_FORMAT
 
 class OutOfDateAnnotationException(Exception):
     def __init__(self, message, blobid, blob_date, compared_date):
@@ -349,4 +238,3 @@ def get_default_keyname(blobid, prefix):
 
 def generate_timestamp():
     return datetime.now().strftime(DT_FORMAT)[:-3]
-

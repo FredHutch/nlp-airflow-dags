@@ -3,11 +3,11 @@ import subprocess
 from datetime import datetime, timedelta
 
 import utilities.job_states as job_states
-import utilities.common as common
+import utilities.common_hooks as common_hooks
+import utilities.common_variables as common_variables
 import utilities.job_states as job_states
 from operators.trashman import trashman_utilities
 from airflow.operators.email_operator import EmailOperator
-from operators.trashman.common_vars import REDRIVE_RUN_ID, REDRIVE_STALE_BRAT_TABLE
 
 
 def check_brat_staleness(upstream_task, **kwargs):
@@ -21,11 +21,11 @@ def check_brat_staleness(upstream_task, **kwargs):
     
 
     #list all the files ending with ann and find the modified dates
-    remote_command = r"find {dir} -type f -name *.ann -printf '%TY-%Tm-%Td\t%p\n' 2>&1 | grep -v 'Permission denied'".format(dir=common.BRAT_NLP_FILEPATH)
+    remote_command = r"find {dir} -type f -name *.ann -printf '%TY-%Tm-%Td\t%p\n' 2>&1 | grep -v 'Permission denied'".format(dir=common_hooks.BRAT_NLP_FILEPATH)
     #output of check_output is in bytes
-    output = subprocess.getoutput('ssh -o StrictHostKeyChecking=no -p {} {}@{} "{}"'.format(common.BRAT_SSH_HOOK.port,
-                                                                                          common.BRAT_SSH_HOOK.username,
-                                                                                    common.BRAT_SSH_HOOK.remote_host,
+    output = subprocess.getoutput('ssh -o StrictHostKeyChecking=no -p {} {}@{} "{}"'.format(common_hooks.BRAT_SSH_HOOK.port,
+                                                                                          common_hooks.BRAT_SSH_HOOK.username,
+                                                                                    common_hooks.BRAT_SSH_HOOK.remote_host,
                                                                                     remote_command))
     #converte bytes to str/datetime datatypes
     parsed_output  = trashman_utilities.parse_remote_output(output, check_date)
@@ -38,14 +38,14 @@ def check_brat_staleness(upstream_task, **kwargs):
     return run_id, date_stamp, check_date, stale_brat_files
 
 
-def write_run_details(run_id, check_date, brat_files, stale_threshold=common.STALE_THRESHOLD):
+def write_run_details(run_id, check_date, brat_files, stale_threshold=common_variables.STALE_THRESHOLD):
     """
     Writes run statistics on stale v. nonstale files in brat. Used to track modification over time.
     param: brat_files: list of dicts containing File, ModifiedDate, ElapsedTime, and IsStale
     """
     tgt_insert_stmt = ("INSERT INTO {job_table} "
                        "({run_id}, stale_threshold_days, stale_check_date, directory_location, last_modified_date, job_status) "
-                       "VALUES (%s, %s, %s, %s, %s, %s)".format(job_table=REDRIVE_STALE_BRAT_TABLE, run_id=REDRIVE_RUN_ID))
+                       "VALUES (%s, %s, %s, %s, %s, %s)".format(job_table=common_variables.REDRIVE_STALE_BRAT_TABLE, run_id=common_variables.REDRIVE_RUN_ID))
     brat_capacity = len(brat_files)
     #get count of stale v. nonstale in current run
     stale_count = sum(d.get('IsStale') for d in brat_files)
@@ -53,7 +53,7 @@ def write_run_details(run_id, check_date, brat_files, stale_threshold=common.STA
     non_stale_count = brat_capacity - stale_count
     #write job_id, count of stale vs nonstale to db, and threshold parameter
     for file in [f for f in brat_files if f['IsStale']]:
-        common.AIRFLOW_NLP_DB.run(tgt_insert_stmt,
+        common_hooks.AIRFLOW_NLP_DB.run(tgt_insert_stmt,
                           parameters=(run_id,
                                       stale_threshold.days,
                                       check_date,

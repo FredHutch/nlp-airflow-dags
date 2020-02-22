@@ -3,10 +3,10 @@ import subprocess
 from datetime import datetime, timedelta
 
 import utilities.job_states as job_states
-import utilities.common as common
+import utilities.common_hooks as common_hooks
+import utilities.common_variables as common_variables
 from airflow.operators.email_operator import EmailOperator
 from operators.trashman import trashman_utilities
-from operators.trashman.common_vars import REDRIVE_RUN_ID, REDRIVE_COMPLETE_BRAT_TABLE, REDRIVE_SOURCE_BRAT_TABLE
 
 
 def check_brat_completeness(upstream_task, **kwargs):
@@ -29,11 +29,11 @@ def _get_complete_brat_notes_from_db():
                         "LEFT JOIN {job_table} as j "
                         "  ON b.brat_id = j.brat_id "
                         "WHERE b.job_status = '{complete_status}' "
-                        "AND j.brat_id is NULL ".format(brat_table=REDRIVE_SOURCE_BRAT_TABLE,
-                                                        job_table=REDRIVE_COMPLETE_BRAT_TABLE,
+                        "AND j.brat_id is NULL ".format(brat_table=common_variables.REDRIVE_SOURCE_BRAT_TABLE,
+                                                        job_table=common_variables.REDRIVE_COMPLETE_BRAT_TABLE,
                                                         complete_status=job_states.BRAT_READY_TO_EXTRACT))
 
-    completed_notes = (common.AIRFLOW_NLP_DB.get_records(src_select_stmt) or [])
+    completed_notes = (common_hooks.AIRFLOW_NLP_DB.get_records(src_select_stmt) or [])
     dict_notes = [{'brat_id': n[0],
                        'last_update_date': n[1],
                        'directory_location':n[2],
@@ -43,7 +43,7 @@ def _get_complete_brat_notes_from_db():
     return dict_notes
 
 
-def write_run_details(run_id, check_date, brat_files, stale_threshold=common.STALE_THRESHOLD):
+def write_run_details(run_id, check_date, brat_files, stale_threshold=common_variables.STALE_THRESHOLD):
     """
     Writes run statistics on stale v. nonstale files in brat. Used to track modification over time.
     param: brat_files: list of dicts containing File, ModifiedDate, ElapsedTime, and IsStale
@@ -58,10 +58,10 @@ def write_run_details(run_id, check_date, brat_files, stale_threshold=common.STA
                        " brat_id,"
                        " hdcorcablobid,"
                        " hdcpupdatedate) "
-                       "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)".format(job_table=REDRIVE_COMPLETE_BRAT_TABLE, run_id=REDRIVE_RUN_ID))
+                       "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)".format(job_table=common_variables.REDRIVE_COMPLETE_BRAT_TABLE, run_id=common_variables.REDRIVE_RUN_ID))
     #write job_id, count of stale vs nonstale to db, and threshold parameter
     for file in brat_files:
-        common.NLP_DB.run(tgt_insert_stmt,
+        common_hooks.NLP_DB.run(tgt_insert_stmt,
                           parameters=(run_id,
                                       stale_threshold.days,
                                       check_date,

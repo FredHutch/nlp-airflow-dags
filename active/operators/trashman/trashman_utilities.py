@@ -1,8 +1,8 @@
-import utilities.common as common
+import utilities.common_variables as common_variables
+import utilities.common_functions as common_functions
 from datetime import datetime, timedelta
 
-
-def compare_dates(brat_files, stale_threshold=common.STALE_THRESHOLD):
+def compare_dates(brat_files, stale_threshold=common_variables.STALE_THRESHOLD):
     """
     Compares dates with predefined airflow threshold (days)
     """
@@ -32,10 +32,10 @@ def parse_remote_output(remote_command_output, check_date):
         try:
             modified_date, path = datetime.strptime(split_string[0], '%Y-%m-%d'), split_string[1]
         except ValueError as e:
-            common.log_error_message(blobid="",
+            common_functions.log_error_message(blobid="",
                                      hdcpupdatedate="",
                                      state="Brat DateTime Parsing",
-                                     time=common.generate_timestamp(),
+                                     time=common_functions.generate_timestamp(),
                                      error_message=e)
             continue
         files = {
