@@ -2,10 +2,8 @@ import json
 import subprocess
 from datetime import datetime, timedelta
 
-import utilities.job_states as job_states
 import utilities.common_hooks as common_hooks
 import utilities.common_variables as common_variables
-import utilities.job_states as job_states
 from operators.trashman import trashman_utilities
 from airflow.operators.email_operator import EmailOperator
 
@@ -59,5 +57,5 @@ def write_run_details(run_id, check_date, brat_files, stale_threshold=common_var
                                       check_date,
                                       file['File'],
                                       file['ModifiedDate'],
-                                      job_states.JOB_RUNNING),
+                                      common_variables.JOB_RUNNING),
                                   autocommit=True)

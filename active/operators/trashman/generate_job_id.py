@@ -1,4 +1,3 @@
-import utilities.job_states as job_states
 import utilities.common_functions as common_functions
 import utilities.common_variables as common_variables
 import utilities.common_hooks as common_hooks
@@ -30,6 +29,6 @@ def _insert_redrive_scheduled(run_id, job_start_date, **kwargs):
                       "({run_id}, job_status, job_start) " 
                       "VALUES (%s, %s, %s)".format(run_table=common_variables.AF4_RUNS_TABLE, run_id=common_variables.AF4_RUN_ID))
     common_hooks.AIRFLOW_NLP_DB.run(tgt_insert_stmt,
-                              parameters=(run_id, job_states.JOB_RUNNING, job_start_date))
+                              parameters=(run_id, common_variables.JOB_RUNNING, job_start_date))
 
     return

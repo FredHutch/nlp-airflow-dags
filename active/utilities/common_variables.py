@@ -1,3 +1,4 @@
+import os
 from airflow.models import Variable
 from datetime import datetime, timedelta
 

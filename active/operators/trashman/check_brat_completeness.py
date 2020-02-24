@@ -2,7 +2,6 @@ import json
 import subprocess
 from datetime import datetime, timedelta
 
-import utilities.job_states as job_states
 import utilities.common_hooks as common_hooks
 import utilities.common_variables as common_variables
 from airflow.operators.email_operator import EmailOperator
@@ -32,7 +31,7 @@ def _get_complete_brat_notes_from_db():
                         "AND j.brat_id is NULL ".format(brat_table=common_variables.AF4_SOURCE_BRAT_TABLE,
                                                         brat_id = common_variables.AF4_SOURCE_BRAT_ID,
                                                         job_table=common_variables.AF4_COMPLETE_BRAT_TABLE,
-                                                        complete_status=job_states.BRAT_READY_TO_EXTRACT))
+                                                        complete_status=common_variables.BRAT_READY_TO_EXTRACT))
 
     completed_notes = (common_hooks.AIRFLOW_NLP_DB.get_records(src_select_stmt) or [])
     dict_notes = [{'brat_id': n[0],
@@ -70,7 +69,7 @@ def write_run_details(run_id, check_date, brat_files, stale_threshold=common_var
                                       check_date,
                                       file['directory_location'],
                                       file['last_modified_date'],
-                                      job_states.JOB_RUNNING,
+                                      common_variables.JOB_RUNNING,
                                       file['brat_id'],
                                       file['hdcorcablobid'],
                                       file['hdcpupdatedate'],

@@ -1,7 +1,6 @@
 import json
 from datetime import datetime, timedelta
 from airflow.operators.email_operator import EmailOperator
-import utilities.job_states as job_states
 import utilities.common_variables as common_variables
 
 def generate_email_operator(dag, task_id, subject, content):
