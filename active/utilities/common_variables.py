@@ -60,9 +60,9 @@ REDRIVE_TASK_FN = {
 AF1_RUNS = 'af1_runs'
 AF1_RUNS_DETAILS = 'af1_runs_details'
 AF1_RUNS_ID = "af1_runs_id"
-# af2 table: brat nanny
-AF2_RUNS_DETAILS = 'af2_runs_details' # brat_review_status
-AF2_RUNS_ID = "af2_runs_id"
+# af2 table: brat nanny (brat review status)
+AF2_RUNS_DETAILS = 'af2_runs_details'
+AF2_RUNS_ID = "af2_runs_id" # brat job id
 # af3 table: resynthesize PHI
 AF3_RUNS = 'af3_runs'
 AF3_RUNS_DETAILS = 'af3_runs_details'
@@ -74,6 +74,7 @@ AF4_STALE_BRAT_TABLE = "af4_stale_brat_jobs"
 AF4_COMPLETE_BRAT_TABLE = "af4_complete_brat_jobs"
 AF4_RUN_ID = "af4_runs_id"
 AF4_SOURCE_BRAT_TABLE = "af2_runs_details"
+AF4_SOURCE_BRAT_ID = "af2_runs_id"
 # af5 table: clinical nlp basics
 AF5_RUNS = 'af5_runs'
 AF5_RUNS_DETAILS = 'af5_runs_details'

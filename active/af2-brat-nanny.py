@@ -48,7 +48,7 @@ def _update_job_status_by_directory_loc(directory_locations):
     sql_quote_escapes_locations = "'" + "','".join(directory_locations) + "'"
     tgt_update_stmt = """
                       UPDATE {table}
-                      SET job_status = '{extract_status}', brat_last_review_date = '{date}'
+                      SET job_status = '{extract_status}', brat_last_modified_date = '{date}'
                       WHERE job_status like '{review_status}'
                       AND directory_location in ({locations})
                       """.format(table = common_variables.AF2_RUNS_DETAILS,
@@ -65,10 +65,12 @@ def _update_job_status_by_directory_loc(directory_locations):
 def _get_notes(status, ids_only=False):
     # get all job records that are ready to check for review completion
     src_select_stmt = """
-                      SELECT brat_id, directory_location, job_status, hdcpupdatedate, hdcorcablobid
+                      SELECT {run_id}, directory_location, job_status, hdcpupdatedate, hdcorcablobid
                       FROM {table}
                       WHERE job_status like '{status}'
-                      """.format(table = common_variables.AF2_RUNS_DETAILS, status=status)
+                      """.format(table = common_variables.AF2_RUNS_DETAILS,
+                                 run_id = common_variables.AF2_RUNS_ID,
+                                 status=status)
 
     job_start_date = datetime.now().strftime(common_variables.DT_FORMAT)[:-3]
     hdcpupdatedates = []
@@ -87,10 +89,12 @@ def _get_notes(status, ids_only=False):
 def _get_note_by_brat_id(brat_id):
     # get all job records that are ready to check for review completion
     src_select_stmt = """
-                          SELECT brat_id, directory_location, job_status
+                          SELECT {run_id}, directory_location, job_status
                           FROM {table}
-                          WHERE brat_id = {brat_id}
-                          """.format(table = common_variables.AF2_RUNS_DETAILS, brat_id=brat_id)
+                          WHERE {run_id} = {brat_id}
+                          """.format(table = common_variables.AF2_RUNS_DETAILS,
+                                     run_id = common_variables.AF2_RUNS_ID,
+                                     brat_id = brat_id)
 
     # make the assumption that this will always return a unique record
     return common_hooks.AIRFLOW_NLP_DB.get_records(src_select_stmt)[0]
@@ -113,9 +117,10 @@ def _update_note_status(brat_id, hdcpupdatedate, job_status):
     update_time = datetime.now().strftime(common_variables.DT_FORMAT)[:-3]
     tgt_update_stmt = """
             UPDATE {table}
-            SET job_status = %s, brat_last_review_date = %s
-            WHERE brat_id in (%s) AND hdcpupdatedate = %s
-            """.format(table = common_variables.AF2_RUNS_DETAILS)
+            SET job_status = %s, brat_last_modified_date = %s
+            WHERE {run_id} in (%s) AND hdcpupdatedate = %s
+            """.format(table = common_variables.AF2_RUNS_DETAILS,
+                       run_id = common_variables.AF2_RUNS_ID)
 
     common_hooks.AIRFLOW_NLP_DB.run(tgt_update_stmt, parameters=(job_status, update_time, brat_id, hdcpupdatedate))
 
