@@ -26,26 +26,29 @@ dag = DAG(dag_id='af1-identify-phi',
 
 def generate_job_id(**kwargs):
     # get last update date from last completed run
-    tgt_select_stmt = "SELECT max(source_last_update_date) FROM af_runs WHERE job_status = %s"
+    tgt_select_stmt = "SELECT max(HDCPUpdateDate) FROM {table} WHERE job_status = %s".format(table=common_variables.AF1_RUNS)
     update_date_from_last_run = common_hooks.AIRFLOW_NLP_DB.get_first(tgt_select_stmt, parameters=(common_variables.JOB_COMPLETE,))[0]
+
     print("last updatedate was {}".format(update_date_from_last_run))
     if update_date_from_last_run is None:
         # first run
         update_date_from_last_run = common_variables.EPOCH
         print("no updatedate found. falling back on epoch of {}".format(update_date_from_last_run))
-    tgt_select_stmt = "SELECT max(af_runs_id) FROM af_runs"
+    tgt_select_stmt = "SELECT max({run_id}) FROM {table}".format(table=common_variables.AF1_RUNS, run_id=common_variables.AF1_RUNS_ID)
     last_run_id = (common_hooks.AIRFLOW_NLP_DB.get_first(tgt_select_stmt)[0] or 0)
     new_run_id = last_run_id + 1
 
     # get last update date from source since last successful run
     # then pull record id with new update date from source
-    src_select_stmt = ("SELECT HDCPUpdateDate, count(*) " 
-                      "FROM vClinicalNoteDiscovery " 
+    src_select_stmt = ("SELECT HDCPUpdateDate, count(*) "
+                      "FROM vClinicalNoteDiscovery "
                       "WHERE HDCPUpdateDate >= %s "
                       "GROUP BY HDCPUpdateDate")
-    tgt_insert_stmt = ("INSERT INTO af_runs "
-                      "(af_runs_id, source_last_update_date, record_counts, job_start, job_status) "
-                      "VALUES (%s, %s, %s, %s, %s)")
+    tgt_insert_stmt = ("INSERT INTO {table} "
+                      "({run_id}, HDCPUpdateDate, record_counts, job_start, job_status) "
+                      "VALUES (%s, %s, %s, %s, %s)".format(table=common_variables.AF1_RUNS,
+                                                           run_id=common_variables.AF1_RUNS_ID)
+                       )
 
     job_start_date = datetime.now().strftime(common_variables.DT_FORMAT)[:-3]
     hdcpupdatedates = []
@@ -76,13 +79,14 @@ def populate_blobid_in_job_table(**kwargs):
     # get record id to be processed
     src_select_stmt = "SELECT DISTINCT HDCOrcaBlobId FROM vClinicalNoteDiscovery WHERE HDCPUpdateDate = %s"
     # get completed jobs so that we do not repeat completed work
-    screen_complete_stmt = ("SELECT HDCOrcaBlobId, HDCPUpdateDate, annotation_date from af_runs_details  "
-                           "WHERE annotation_status = %s")
+    screen_complete_stmt = ("SELECT HDCOrcaBlobId, HDCPUpdateDate, annotation_date from {table} "
+                           "WHERE annotation_status = %s".format(table=common_variables.AF1_RUNS_DETAILS))
     complete_job_rows = common_hooks.AIRFLOW_NLP_DB.get_records(screen_complete_stmt, parameters=(common_variables.JOB_COMPLETE,))
     complete_jobs = {(row[0], row[1]): row[2] for row in complete_job_rows}
 
-    tgt_insert_stmt = ("INSERT INTO af_runs_details (af_runs_id, HDCPUpdateDate, HDCOrcaBlobId, annotation_status) "
-                      "VALUES (%s, %s, %s, %s)")
+    tgt_insert_stmt = ("INSERT INTO {table} ({run_id}, HDCPUpdateDate, HDCOrcaBlobId, annotation_status) "
+                      "VALUES (%s, %s, %s, %s)".format(table=common_variables.AF1_RUNS_DETAILS,
+                                                       run_id=common_variables.AF1_RUNS_ID))
 
     total_job_count = common_variables.MAX_BATCH_SIZE
     for hdcpupdatedate in hdcpupdatedates:
@@ -175,8 +179,8 @@ def send_notes_to_brat(**kwargs):
 
 def update_brat_db_status(note_id, hdcpupdatedate, directory_location):
     tgt_insert_stmt = """
-         INSERT INTO brat_review_status 
-         (HDCOrcaBlobId, last_update_date, directory_location, job_start, job_status, HDCPUpdateDate)
+         INSERT INTO brat_review_status
+         (HDCOrcaBlobId, brat_review_status, directory_location, job_start, job_status, HDCPUpdateDate)
          VALUES (%s, %s, %s, %s, %s, %s)
          """
 
@@ -221,11 +225,17 @@ def annotate_clinical_notes(**kwargs):
     # get last update date
     (run_id, hdcpupdatedates) = kwargs['ti'].xcom_pull(task_ids='generate_job_id')
     tgt_select_stmt = ("SELECT HDCOrcaBlobId "
-                      "FROM af_runs_details "
-                      "WHERE af_runs_id = %s and HDCPUpdateDate = %s and annotation_status = %s")
-    tgt_update_stmt = ("UPDATE af_runs_details "
+                      "FROM {table} "
+                      "WHERE {run_id} = %s "
+                      "AND HDCPUpdateDate = %s "
+                      "AND annotation_status = %s".format(table=common_variables.AF1_RUNS_DETAILS,
+                                                          run_id=common_variables.AF1_RUNS_ID))
+    tgt_update_stmt = ("UPDATE {table} "
                       "SET annotation_status = %s, annotation_date = %s "
-                      "WHERE af_runs_id = %s and HDCPUpdateDate = %s and HDCOrcaBlobId in (%s)")
+                      "WHERE {run_id} = %s "
+                      "AND HDCPUpdateDate = %s "
+                      "AND HDCOrcaBlobId in (%s)".format(table=common_variables.AF1_RUNS_DETAILS,
+                                                         run_id=common_variables.AF1_RUNS_ID))
 
     for hdcpupdatedate in hdcpupdatedates:
         batch_records = {}
@@ -283,7 +293,10 @@ def annotate_clinical_notes(**kwargs):
 
         save_unreviewed_annotations(skip_review)
 
-    tgt_update_stmt = "UPDATE af_runs SET job_end = %s, job_status = %s WHERE af_runs_id = %s"
+    tgt_update_stmt = "UPDATE {table} " \
+                      "SET job_end = %s, job_status = %s " \
+                      "WHERE {run_id} = %s".format(table=common_variables.AF1_RUNS,
+                                                   run_id=common_variables.AF1_RUNS_ID)
     common_hooks.AIRFLOW_NLP_DB.run(tgt_update_stmt, parameters=(datetime.now(), common_variables.JOB_COMPLETE, run_id))
 
 

@@ -24,13 +24,13 @@ def check_brat_completeness(upstream_task, **kwargs):
     write_run_details(run_id, check_date, complete_brat_files)
 
 def _get_complete_brat_notes_from_db():
-    src_select_stmt = ("SELECT b.brat_id, b.last_update_date, b.directory_location, b.hdcorcablobid, b.hdcpupdatedate "
+    src_select_stmt = ("SELECT b.brat_id, b.brat_last_modified_date, b.directory_location, b.hdcorcablobid, b.hdcpupdatedate "
                         "FROM {brat_table} as b "
                         "LEFT JOIN {job_table} as j "
                         "  ON b.brat_id = j.brat_id "
                         "WHERE b.job_status = '{complete_status}' "
-                        "AND j.brat_id is NULL ".format(brat_table=common_variables.REDRIVE_SOURCE_BRAT_TABLE,
-                                                        job_table=common_variables.REDRIVE_COMPLETE_BRAT_TABLE,
+                        "AND j.brat_id is NULL ".format(brat_table=common_variables.AF4_SOURCE_BRAT_TABLE,
+                                                        job_table=common_variables.AF4_COMPLETE_BRAT_TABLE,
                                                         complete_status=job_states.BRAT_READY_TO_EXTRACT))
 
     completed_notes = (common_hooks.AIRFLOW_NLP_DB.get_records(src_select_stmt) or [])
@@ -53,12 +53,12 @@ def write_run_details(run_id, check_date, brat_files, stale_threshold=common_var
                        "stale_threshold_days,"
                        " stale_check_date,"
                        " directory_location,"
-                       " last_modified_date,"
+                       " brat_last_modified_date,"
                        " job_status,"
                        " brat_id,"
                        " hdcorcablobid,"
                        " hdcpupdatedate) "
-                       "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)".format(job_table=common_variables.REDRIVE_COMPLETE_BRAT_TABLE, run_id=common_variables.REDRIVE_RUN_ID))
+                       "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)".format(job_table=common_variables.AF4_COMPLETE_BRAT_TABLE, run_id=common_variables.AF4_RUN_ID))
     #write job_id, count of stale vs nonstale to db, and threshold parameter
     for file in brat_files:
         common_hooks.NLP_DB.run(tgt_insert_stmt,

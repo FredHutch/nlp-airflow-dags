@@ -11,20 +11,21 @@ def populate_blobid_in_job_table(**kwargs):
 
     # get record id to be processed
     src_select_stmt = "SELECT DISTINCT hdcorcablobid, hdcpupdatedate " \
-                      "FROM af_resynthesis_runs_details " \
+                      "FROM {table} " \
                       "WHERE resynth_date = %s " \
-                      "AND resynth_status = %s "
+                      "AND resynth_status = %s ".format(table=common_variables.AF3_RUNS_DETAILS)
     # get completed jobs so that we do not repeat completed work
     screen_complete_stmt = "SELECT hdcorcablobid, hdcpupdatedate, ner_date " \
-                           "FROM af_ner_runs_details  " \
-                           "WHERE ner_status = %s"
+                           "FROM {table}  " \
+                           "WHERE ner_status = %s".format(table=common_variables.AF5_RUNS_DETAILS)
     complete_job_rows = common_hooks.AIRFLOW_NLP_DB.get_records(screen_complete_stmt, parameters=(common_variables.JOB_COMPLETE,))
     print('complete_job_rows, ', complete_job_rows)
     complete_jobs = {(row[0], row[1]): row[2] for row in complete_job_rows}
 
-    tgt_insert_stmt = "INSERT INTO af_ner_runs_details " \
-                      "(af_ner_runs_id, hdcpupdatedate, hdcorcablobid, resynth_date, ner_status, ner_date) " \
-                      "VALUES (%s, %s, %s, %s, %s, %s) "
+    tgt_insert_stmt = "INSERT INTO {table} " \
+                      "({run_id}, hdcpupdatedate, hdcorcablobid, resynth_date, ner_status, ner_date) " \
+                      "VALUES (%s, %s, %s, %s, %s, %s) ".format(table=common_variables.AF5_RUNS_DETAILS,
+                                                                run_id=common_variables.AF5_RUNS_ID)
 
     jobs_list = []
     for resynthdate in resynthdates:

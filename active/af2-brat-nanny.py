@@ -47,11 +47,12 @@ def _update_job_status_by_directory_loc(directory_locations):
     update_time = datetime.now().strftime(common_variables.DT_FORMAT)[:-3]
     sql_quote_escapes_locations = "'" + "','".join(directory_locations) + "'"
     tgt_update_stmt = """
-                      UPDATE brat_review_status 
-                      SET job_status = '{extract_status}', last_update_date = '{date}' 
+                      UPDATE {table}
+                      SET job_status = '{extract_status}', brat_last_review_date = '{date}'
                       WHERE job_status like '{review_status}'
                       AND directory_location in ({locations})
-                      """.format(extract_status=common_variables.BRAT_READY_TO_EXTRACT,
+                      """.format(table = common_variables.AF2_RUNS_DETAILS,
+                                 extract_status=common_variables.BRAT_READY_TO_EXTRACT,
                                  date=update_time,
                                  review_status=common_variables.BRAT_PENDING,
                                  locations=sql_quote_escapes_locations)
@@ -64,10 +65,10 @@ def _update_job_status_by_directory_loc(directory_locations):
 def _get_notes(status, ids_only=False):
     # get all job records that are ready to check for review completion
     src_select_stmt = """
-                      SELECT brat_id, directory_location, job_status, hdcpupdatedate, hdcorcablobid 
-                      FROM brat_review_status 
+                      SELECT brat_id, directory_location, job_status, hdcpupdatedate, hdcorcablobid
+                      FROM {table}
                       WHERE job_status like '{status}'
-                      """.format(status=status)
+                      """.format(table = common_variables.AF2_RUNS_DETAILS, status=status)
 
     job_start_date = datetime.now().strftime(common_variables.DT_FORMAT)[:-3]
     hdcpupdatedates = []
@@ -86,10 +87,10 @@ def _get_notes(status, ids_only=False):
 def _get_note_by_brat_id(brat_id):
     # get all job records that are ready to check for review completion
     src_select_stmt = """
-                          SELECT brat_id, directory_location, job_status 
-                          FROM brat_review_status 
+                          SELECT brat_id, directory_location, job_status
+                          FROM {table}
                           WHERE brat_id = {brat_id}
-                          """.format(brat_id=brat_id)
+                          """.format(table = common_variables.AF2_RUNS_DETAILS, brat_id=brat_id)
 
     # make the assumption that this will always return a unique record
     return common_hooks.AIRFLOW_NLP_DB.get_records(src_select_stmt)[0]
@@ -111,10 +112,10 @@ def _scan_note_for_completion(review_note):
 def _update_note_status(brat_id, hdcpupdatedate, job_status):
     update_time = datetime.now().strftime(common_variables.DT_FORMAT)[:-3]
     tgt_update_stmt = """
-            UPDATE brat_review_status 
-            SET job_status = %s, last_update_date = %s 
+            UPDATE {table}
+            SET job_status = %s, brat_last_review_date = %s
             WHERE brat_id in (%s) AND hdcpupdatedate = %s
-            """
+            """.format(table = common_variables.AF2_RUNS_DETAILS)
 
     common_hooks.AIRFLOW_NLP_DB.run(tgt_update_stmt, parameters=(job_status, update_time, brat_id, hdcpupdatedate))
 

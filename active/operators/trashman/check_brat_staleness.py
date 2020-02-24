@@ -44,8 +44,8 @@ def write_run_details(run_id, check_date, brat_files, stale_threshold=common_var
     param: brat_files: list of dicts containing File, ModifiedDate, ElapsedTime, and IsStale
     """
     tgt_insert_stmt = ("INSERT INTO {job_table} "
-                       "({run_id}, stale_threshold_days, stale_check_date, directory_location, last_modified_date, job_status) "
-                       "VALUES (%s, %s, %s, %s, %s, %s)".format(job_table=common_variables.REDRIVE_STALE_BRAT_TABLE, run_id=common_variables.REDRIVE_RUN_ID))
+                       "({run_id}, stale_threshold_days, stale_check_date, directory_location, brat_last_modified_date, job_status) "
+                       "VALUES (%s, %s, %s, %s, %s, %s)".format(job_table=common_variables.AF4_STALE_BRAT_TABLE, run_id=common_variables.AF4_RUN_ID))
     brat_capacity = len(brat_files)
     #get count of stale v. nonstale in current run
     stale_count = sum(d.get('IsStale') for d in brat_files)

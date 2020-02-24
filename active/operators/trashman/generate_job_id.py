@@ -19,7 +19,7 @@ def generate_job_id(**kwargs):
 
 
 def _get_last_redrive_run_id():
-    return common_functions.get_last_run_id(common_variables.REDRIVE_RUNS_TABLE, common_variables.REDRIVE_RUN_ID)
+    return common_functions.get_last_run_id(common_variables.AF4_RUNS_TABLE, common_variables.AF4_RUN_ID)
 
 
 def _insert_redrive_scheduled(run_id, job_start_date, **kwargs):
@@ -28,7 +28,7 @@ def _insert_redrive_scheduled(run_id, job_start_date, **kwargs):
     """
     tgt_insert_stmt = ("INSERT INTO {run_table} " 
                       "({run_id}, job_status, job_start) " 
-                      "VALUES (%s, %s, %s)".format(run_table=common_variables.REDRIVE_RUNS_TABLE, run_id=common_variables.REDRIVE_RUN_ID))
+                      "VALUES (%s, %s, %s)".format(run_table=common_variables.AF4_RUNS_TABLE, run_id=common_variables.AF4_RUN_ID))
     common_hooks.AIRFLOW_NLP_DB.run(tgt_insert_stmt,
                               parameters=(run_id, job_states.JOB_RUNNING, job_start_date))
 

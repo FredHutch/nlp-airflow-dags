@@ -6,6 +6,7 @@ from datetime import datetime, timedelta
 from utilities.common_hooks import AIRFLOW_NLP_DB, ERROR_DB, ANNOTATIONS_DB, SOURCE_NOTE_DB
 from utilities.common_variables import DT_FORMAT
 
+
 class OutOfDateAnnotationException(Exception):
     def __init__(self, message, blobid, blob_date, compared_date):
         additional_info = "Blob ID: {blobid}, " \
@@ -65,15 +66,15 @@ def save_json_annotation(hdcorcablobid, hdcpupdatedate, json_annotation, annotat
 
 
 def log_error_and_failure_for_deid_note_job(run_id, blobid, hdcpupdatedate, message, state):
-    tgt_update_stmt = ("UPDATE af_runs_details "
+    tgt_update_stmt = ("UPDATE af1_runs_details "
                       "SET annotation_status = %s, annotation_date = %s "
-                      "WHERE af_runs_id = %s and HDCPUpdateDate = %s and HDCOrcaBlobID in (%s)")
+                      "WHERE af1_runs_id = %s and HDCPUpdateDate = %s and HDCOrcaBlobID in (%s)")
     _log_failure(run_id, blobid, hdcpupdatedate, message, state, tgt_update_stmt)
 
 
 def log_error_and_failure_for_resynth_note_job(run_id, blobid, hdcpupdatedate, message, state):
-    tgt_update_stmt = ("UPDATE af_resynthesis_runs_details SET resynth_status = %s, resynth_date = %s "
-                      "WHERE af_resynth_runs_id = %s and HDCPUpdateDate = %s and HDCOrcaBlobID in (%s)")
+    tgt_update_stmt = ("UPDATE af3_runs_details SET resynth_status = %s, resynth_date = %s "
+                      "WHERE af3_runs_id = %s and HDCPUpdateDate = %s and HDCOrcaBlobID in (%s)")
     _log_failure(run_id, blobid, hdcpupdatedate, message, state, tgt_update_stmt)
 
 def log_error_and_failure_for_ner_job(run_id, blobid, hdcpupdatedate, message, state):
@@ -184,7 +185,7 @@ def _get_last_resynth_date_on_storage(**kwargs):
     return {'blob filename': 'last modified date', ...}
     """
     select_stmt = ("SELECT MAX(resynth_date) " \
-                   "FROM af_resynthesis_runs_details " \
+                   "FROM af3_runs_details " \
                    "WHERE resynth_status = %s ")
     last_resynth_date_on_storage = (AIRFLOW_NLP_DB.get_first(select_stmt, parameters=(job_states.JOB_COMPLETE,)) or (None,))
     return last_resynth_date_on_storage[0]
@@ -203,7 +204,7 @@ def write_to_storage(blobid, sourcetable, job_state_type, updatedate_type, updat
     if job_date is None or job_date <= update_date:
         connection.object_put_json(key, json.dumps(payload))
         return
-    if sourcetable == "af_resynthesis_runs_details":
+    if sourcetable == "af3_runs_details":
         raise OutOfDateAnnotationException("OutOfDateAnnotationException: \
                                            A newer version of the annotation exists in Object Storage ",
                                            blobid,
@@ -232,7 +233,7 @@ def get_last_run_id(run_table_name, run_id_name):
 
     return last_run_id[0]
 
- 
+
 def get_default_keyname(blobid, prefix):
     return '{prefix}/{id}.json'.format(prefix=prefix, id=blobid)
 

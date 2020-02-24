@@ -47,9 +47,10 @@ def _insert_ner_scheduled(run_id, update_date, job_start_date, **kwargs):
     :param job_start_date: ner job start date
     :param update_date:  resynth_date from the af_resynthesis_runs_details table where resynth_status == complete
     """
-    tgt_insert_stmt = "INSERT INTO af_ner_runs " \
-                      "(af_ner_runs_id, job_status, job_start, resynth_date) " \
-                      "VALUES (%s, %s, %s, %s)"
+    tgt_insert_stmt = "INSERT INTO {table}" \
+                      "({run_id}, job_status, job_start, resynth_date) " \
+                      "VALUES (%s, %s, %s, %s)".format(table=common_variables.AF5_RUNS,
+                                                       run_id=common_variables.AF5_RUNS_ID)
     common_hooks.AIRFLOW_NLP_DB.run(tgt_insert_stmt,
                               parameters=(run_id, common_variables.JOB_RUNNING, job_start_date, update_date))
 
@@ -62,14 +63,15 @@ def _get_blobs_since_date(date, state, **kwargs):
     :param state: resynth job complete
     """
     tgt_update_stmt = "SELECT distinct hdcorcablobid, resynth_date " \
-                      "FROM af_resynthesis_runs_details " \
+                      "FROM {table} " \
                       "WHERE resynth_date >= %s " \
-                      "AND resynth_status = %s "
+                      "AND resynth_status = %s ".format(table=common_variables.AF5_RUNS_DETAILS)
     return common_hooks.AIRFLOW_NLP_DB.get_records(tgt_update_stmt, parameters=(date, state))
 
 
 def _get_last_ner_run_id(**kwargs):
-    tgt_select_stmt = "SELECT max(af_ner_runs_id) FROM af_ner_runs"
+    tgt_select_stmt = "SELECT max({run_id}) FROM {table}".format(table=common_variables.AF5_RUNS,
+                                                                 run_id=common_variables.AF5_RUNS_ID)
     last_run_id = (common_hooks.AIRFLOW_NLP_DB.get_first(tgt_select_stmt) or (None,))
 
     return last_run_id[0]
@@ -77,8 +79,8 @@ def _get_last_ner_run_id(**kwargs):
 
 def _get_last_ner_update_date(**kwargs):
     tgt_select_stmt = "SELECT max(resynth_date) " \
-                      "FROM af_ner_runs " \
-                      "WHERE job_status = %s"
+                      "FROM {table} " \
+                      "WHERE job_status = %s".format(table=common_variables.AF5_RUNS)
     last_ner_update_date = (common_hooks.AIRFLOW_NLP_DB.get_first(tgt_select_stmt,
                                                             parameters=(common_variables.NLP_NER_COMPLETE,)) or (None,))
 

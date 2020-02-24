@@ -46,15 +46,39 @@ NLP_NER_FAILED = "NER Failed"
 ################
 #Trashman Vars #
 ################
-REDRIVE_RUNS_TABLE = "af_trashman_runs"
-REDRIVE_JOBS_TABLE = "af_trashman_runs_details"
-REDRIVE_STALE_BRAT_TABLE = "af_trashman_stale_brat_jobs"
-REDRIVE_COMPLETE_BRAT_TABLE = "af_trashman_complete_brat_jobs"
-REDRIVE_RUN_ID = "af_trashman_runs_id"
-REDRIVE_SOURCE_BRAT_TABLE = "brat_review_status"
 
 REDRIVE_TASK_FN = {
     'BRAT_STALE': True,
     'RESYNTH': True,
     'DEID': True
 }
+
+################
+#AF Table Names#
+################
+# af1 table: identify phi
+AF1_RUNS = 'af1_runs'
+AF1_RUNS_DETAILS = 'af1_runs_details'
+AF1_RUNS_ID = "af1_runs_id"
+# af2 table: brat nanny
+AF2_RUNS_DETAILS = 'af2_runs_details' # brat_review_status
+AF2_RUNS_ID = "af2_runs_id"
+# af3 table: resynthesize PHI
+AF3_RUNS = 'af3_runs'
+AF3_RUNS_DETAILS = 'af3_runs_details'
+AF3_RUNS_ID = "af3_runs_id"
+# af4 table: trashman
+AF4_RUNS_TABLE = "af4_runs"
+AF4_RUNS_TABLE_DETAILS = "af4_runs_details"
+AF4_STALE_BRAT_TABLE = "af4_stale_brat_jobs"
+AF4_COMPLETE_BRAT_TABLE = "af4_complete_brat_jobs"
+AF4_RUN_ID = "af4_runs_id"
+AF4_SOURCE_BRAT_TABLE = "af2_runs_details"
+# af5 table: clinical nlp basics
+AF5_RUNS = 'af5_runs'
+AF5_RUNS_DETAILS = 'af5_runs_details'
+AF5_RUNS_ID = "af5_runs_id"
+# source table
+ANNOTATION_TABLE = 'annotations'
+TEMP_PERSON = 'TEMP_PERSON'
+PatientMap = 'PatientMap'
