@@ -6,8 +6,9 @@ import base64
 
 from airflow.operators.python_operator import PythonOperator
 from airflow.models import DAG
-import utilities.common_hooks as common_hooks
+
 import utilities.common_variables as common_variables
+import utilities.common_hooks as common_hooks
 import utilities.common_functions as common_functions
 
 args = {
