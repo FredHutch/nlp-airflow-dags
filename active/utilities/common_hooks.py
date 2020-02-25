@@ -6,6 +6,7 @@ from airflow.hooks.postgres_hook import PostgresHook
 from airflow.contrib.hooks.ssh_hook import SSHHook
 
 from airflow.models import Variable
+import utilities.common_variables as common_variables
 
 __error_db_stage_dict = {"PROD": PostgresHook(postgres_conn_id="prod-airflow-nlp-pipeline"),
                          "DEV": PostgresHook(postgres_conn_id="dev-airflow-nlp-pipeline")
