@@ -78,7 +78,8 @@ def populate_blobid_in_job_table(**kwargs):
     (run_id, hdcpupdatedates) = kwargs['ti'].xcom_pull(task_ids='generate_job_id')
 
     # get record id to be processed
-    src_select_stmt = "SELECT DISTINCT HDCOrcaBlobId FROM vClinicalNoteDiscovery WHERE HDCPUpdateDate = %s"
+    src_select_stmt = "SELECT DISTINCT top {} HDCOrcaBlobId FROM vClinicalNoteDiscovery WHERE HDCPUpdateDate = %s".\
+                    format(common_variables.MAX_BATCH_SIZE)
     # get completed jobs so that we do not repeat completed work
     screen_complete_stmt = ("SELECT HDCOrcaBlobId, HDCPUpdateDate, annotation_date from {table} "
                            "WHERE annotation_status = %s".format(table=common_variables.AF1_RUNS_DETAILS))
