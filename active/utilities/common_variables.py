@@ -6,7 +6,7 @@ from datetime import datetime, timedelta
 DEFAULT_EMAIL_TGT = "nlp@fredhutch.org"
 BRAT_ASSIGNEE = Variable.get("BRAT_CONFIG", deserialize_json=True)["BRAT_ASSIGNEE"]
 BRAT_DEFAULT_ASSIGNEE = "ALL_USERS"
-MAX_BATCH_SIZE = Variable.get("MAX_BATCH_SIZE", 3)
+MAX_BATCH_SIZE = int(Variable.get("MAX_BATCH_SIZE", 3))
 os.environ['OS_AUTH_URL'] =  Variable.get('OS_AUTH_URL')
 os.environ['OS_PASSWORD'] = Variable.get('OS_PASSWORD')
 os.environ['OS_TENANT_NAME'] = Variable.get('OS_TENANT_NAME')
