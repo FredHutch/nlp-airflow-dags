@@ -4,7 +4,7 @@ from contextlib import closing
 from datetime import datetime, timedelta
 
 from utilities.common_hooks import AIRFLOW_NLP_DB, ERROR_DB, ANNOTATIONS_DB, SOURCE_NOTE_DB
-from utilities.common_variables import DT_FORMAT
+import utilities.common_variables as common_variables
 
 
 class OutOfDateAnnotationException(Exception):
@@ -54,7 +54,7 @@ def save_json_annotation(hdcorcablobid, hdcpupdatedate, json_annotation, annotat
     tgt_insert_stmt = ("INSERT INTO annotations "
                       "(HDCOrcaBlobID, HDCPUpdateDate, category, date_created, date_modified, annotation) "
                       "VALUES (%s, %s, %s, %s, %s, %s)")
-    job_start_date = datetime.now().strftime(DT_FORMAT)[:-3]
+    job_start_date = datetime.now().strftime(common_variables.DT_FORMAT)[:-3]
     print("new annotation added: BlobId {}, HDCPUpdateDate {}: annotation_type {}, job_start_date {}".format(
         hdcorcablobid, hdcpupdatedate, annotation_type, job_start_date))
 
@@ -83,12 +83,12 @@ def log_error_and_failure_for_ner_job(run_id, blobid, hdcpupdatedate, message, s
     _log_failure(run_id, blobid, hdcpupdatedate, message, state, tgt_update_stmt)
 
 def _log_failure(run_id, blobid, hdcpupdatedate, message, state, update_stmt):
-    time_of_error = datetime.now().strftime(DT_FORMAT)[:-3]
+    time_of_error = datetime.now().strftime(common_variables.DT_FORMAT)[:-3]
     log_error_message(blobid=blobid, hdcpupdatedate=hdcpupdatedate, state=state,
                       time=time_of_error,
                       error_message=message)
     AIRFLOW_NLP_DB.run(update_stmt,
-                       parameters=(job_states.JOB_FAILURE, time_of_error, run_id, hdcpupdatedate, blobid), autocommit=True)
+                       parameters=(common_variables.JOB_FAILURE, time_of_error, run_id, hdcpupdatedate, blobid), autocommit=True)
 
 
 def get_original_note_by_blobid(blobid):
@@ -142,7 +142,6 @@ def get_note_and_metadata_dict_from_source(blobId, hdcpupdatedate):
                         " WHERE HDCOrcaBlobID = %s AND HDCPUpdateDate = %s")
 
     result = (SOURCE_NOTE_DB.get_first(note_select_stmt, parameters=(blobId, hdcpupdatedate))
-        or (None, None, None, None, None, None))
 
     result_dict = {"clinical_event_id": result[0],
                    "blob_contents": result[1],
@@ -170,13 +169,13 @@ def _get_most_recent_successful_note_job_update_date(blobid, sourcetable, update
                                                       sourcetable=sourcetable,
                                                       job_state_type=job_state_type))
 
-    return AIRFLOW_NLP_DB.get_first(select_stmt, parameters=(blobid, job_states.JOB_COMPLETE))[0]
+    return AIRFLOW_NLP_DB.get_first(select_stmt, parameters=(blobid, common_variables.JOB_COMPLETE))[0]
 
 def _get_most_recent_ner_start_date(**kwargs):
     select_stmt = ("SELECT MAX(job_start) " \
                    "FROM af_ner_runs " \
                    "WHERE job_status = %s ")
-    most_recent_ner_start_date = (AIRFLOW_NLP_DB.run(select_stmt, parameters=(job_states.JOB_RUNNING,)) or (None,))
+    most_recent_ner_start_date = (AIRFLOW_NLP_DB.run(select_stmt, parameters=(common_variables.JOB_RUNNING,)) or (None,))
     return most_recent_ner_start_date[0]
 
 def _get_last_resynth_date_on_storage(**kwargs):
@@ -187,7 +186,7 @@ def _get_last_resynth_date_on_storage(**kwargs):
     select_stmt = ("SELECT MAX(resynth_date) " \
                    "FROM af3_runs_details " \
                    "WHERE resynth_status = %s ")
-    last_resynth_date_on_storage = (AIRFLOW_NLP_DB.get_first(select_stmt, parameters=(job_states.JOB_COMPLETE,)) or (None,))
+    last_resynth_date_on_storage = (AIRFLOW_NLP_DB.get_first(select_stmt, parameters=(common_variables.JOB_COMPLETE,)) or (None,))
     return last_resynth_date_on_storage[0]
 
 def write_to_storage(blobid, sourcetable, job_state_type, updatedate_type, update_date, payload, key, connection):
@@ -238,4 +237,4 @@ def get_default_keyname(blobid, prefix):
     return '{prefix}/{id}.json'.format(prefix=prefix, id=blobid)
 
 def generate_timestamp():
-    return datetime.now().strftime(DT_FORMAT)[:-3]
+    return datetime.now().strftime(common_variables.DT_FORMAT)[:-3]

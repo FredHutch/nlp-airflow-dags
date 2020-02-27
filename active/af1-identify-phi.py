@@ -27,8 +27,11 @@ dag = DAG(dag_id='af1-identify-phi',
 
 def generate_job_id(**kwargs):
     # get last update date from last completed run
-    tgt_select_stmt = "SELECT max(HDCPUpdateDate) FROM {table} WHERE job_status = %s".format(table=common_variables.AF1_RUNS)
-    update_date_from_last_run = common_hooks.AIRFLOW_NLP_DB.get_first(tgt_select_stmt, parameters=(common_variables.JOB_COMPLETE,))[0]
+    tgt_select_stmt = "SELECT max(HDCPUpdateDate) FROM {table} WHERE job_status = %s".\
+                      format(table=common_variables.AF1_RUNS)
+    update_date_from_last_run = common_hooks.AIRFLOW_NLP_DB.\
+                      get_first(tgt_select_stmt, parameters=(common_variables.JOB_COMPLETE,))[0].\
+                      strftime(common_variables.DT_FORMAT)[:-3]
 
     print("last updatedate was {}".format(update_date_from_last_run))
     if update_date_from_last_run is None:
@@ -102,9 +105,9 @@ def populate_blobid_in_job_table(**kwargs):
             common_hooks.AIRFLOW_NLP_DB.run(tgt_insert_stmt, parameters=(run_id, hdcpupdatedate, row[0], common_variables.JOB_RUNNING))
             total_job_count -= 1
             if total_job_count == 0:
-                print("Job Batch for hdcpupdatedate: {}  contains {} notes"
-                      " and exceeds cumulative total per-run Job Size of {}."
-                      " Breaking early.".format(row[0], row[1], common_variables.MAX_BATCH_SIZE))
+                print("Job Batch cumulative total per-run Job Size of {batch_limit}."
+                      " Breaking early without processing {blobid}"\
+                      .format(batch_limit=common_variables.MAX_BATCH_SIZE, blobid=row[0]))
                 break
 
 
@@ -241,16 +244,18 @@ def annotate_clinical_notes(**kwargs):
 
     for hdcpupdatedate in hdcpupdatedates:
         batch_records = {}
+        hdcpupdatedate = hdcpupdatedate.strftime(common_variables.DT_FORMAT)[:-3]
         for id_row in common_hooks.AIRFLOW_NLP_DB.get_records(tgt_select_stmt,
                                                         parameters=(run_id, hdcpupdatedate, common_variables.JOB_RUNNING)):
             blobid = id_row[0]
-            note_metadata = common_hooks.get_note_and_metadata_dict_from_source(blobid, hdcpupdatedate)
-            patient_data = common_hooks.get_patient_data_from_source(note_metadata["patient_id"])
+
+            note_metadata = common_functions.get_note_and_metadata_dict_from_source(blobid, hdcpupdatedate)
+            patient_data = common_functions.get_patient_data_from_source(note_metadata["patient_id"])
 
             if note_metadata["patient_id"] is None or patient_data is None:
                 message = "Exception occurred: No PatientID found for BlobId, HDCPUpdateDate: {id},{date}".format(
                     id=blobid, date=hdcpupdatedate)
-                common_hooks.log_error_and_failure_for_deid_note_job(run_id,
+                common_functions.log_error_and_failure_for_deid_note_job(run_id,
                                                                blobid,
                                                                hdcpupdatedate,
                                                                message,
@@ -264,7 +269,7 @@ def annotate_clinical_notes(**kwargs):
                                        "annotation_by_source": True}
             record['hdcpupdatedate'] = hdcpupdatedate
             try:
-                resp = common_hooks.DEID_NLP_API_HOOK.run("/deid/annotate", data=json.dumps(record['original_note']),
+                resp = common_hooks.DEID_NLP_API_HOOK.run("/identifyphi", data=json.dumps(record['original_note']),
                                     headers={"Content-Type": "application/json"})
                 record['annotated_note'] = json.loads(resp.content)
                 annotation_status = common_variables.JOB_COMPLETE
@@ -290,7 +295,8 @@ def annotate_clinical_notes(**kwargs):
 
         for assignee, to_review_by_assignee in assignment.items():
             send_notes_to_brat(clinical_notes=to_review_by_assignee,
-                               datafolder='{assignee}/{date}'.format(assignee=assignee, date=hdcpupdatedate.strftime('%Y-%m-%d')))
+                               datafolder='{assignee}/{date}'.format(assignee=assignee,
+                                                                     date=hdcpupdatedate[:10]))
             save_deid_annotations(to_review_by_assignee)
 
         save_unreviewed_annotations(skip_review)
@@ -299,7 +305,8 @@ def annotate_clinical_notes(**kwargs):
                       "SET job_end = %s, job_status = %s " \
                       "WHERE {run_id} = %s".format(table=common_variables.AF1_RUNS,
                                                    run_id=common_variables.AF1_RUNS_ID)
-    common_hooks.AIRFLOW_NLP_DB.run(tgt_update_stmt, parameters=(datetime.now(), common_variables.JOB_COMPLETE, run_id))
+    common_hooks.AIRFLOW_NLP_DB.run(tgt_update_stmt, parameters=(datetime.now().strftime(common_variables.DT_FORMAT)[:-3],
+                                                                 common_variables.JOB_COMPLETE, run_id))
 
 
 def save_deid_annotations(annotation_records):
