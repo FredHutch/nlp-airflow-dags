@@ -141,7 +141,7 @@ def get_note_and_metadata_dict_from_source(blobId, hdcpupdatedate):
                         " FROM vClinicalNoteDiscovery"
                         " WHERE HDCOrcaBlobID = %s AND HDCPUpdateDate = %s")
 
-    result = (SOURCE_NOTE_DB.get_first(note_select_stmt, parameters=(blobId, hdcpupdatedate))
+    result = (SOURCE_NOTE_DB.get_first(note_select_stmt, parameters=(blobId, hdcpupdatedate)))
 
     result_dict = {"clinical_event_id": result[0],
                    "blob_contents": result[1],
