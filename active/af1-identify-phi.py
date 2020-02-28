@@ -57,6 +57,14 @@ def generate_job_id(**kwargs):
     job_start_date = datetime.now().strftime(common_variables.DT_FORMAT)[:-3]
     hdcpupdatedates = []
     total_job_count = common_variables.MAX_BATCH_SIZE
+
+    # temp fix: string formatting for the most recent update date
+    # (note right now this has to be hard coded to earlier than 2020-01-09 ... or else it will hang)
+
+    temp_date = common_variables.TEMP_DATE
+    if update_date_from_last_run >= temp_date:
+        update_date_from_last_run = temp_date
+
     for row in common_hooks.SOURCE_NOTE_DB.get_records(src_select_stmt, parameters=(update_date_from_last_run,)):
         hdcpupdatedates.append(row[0])
         common_hooks.AIRFLOW_NLP_DB.run(tgt_insert_stmt, parameters=(new_run_id, row[0], row[1], job_start_date, common_variables.JOB_RUNNING))
