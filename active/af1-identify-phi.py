@@ -135,7 +135,7 @@ def send_notes_to_brat(**kwargs):
                 "ssh {}@{} {}".format(common_hooks.BRAT_SSH_HOOK.username, common_hooks.BRAT_SSH_HOOK.remote_host, remote_command))
 
             if is_datefolder_found != 'found':
-                remote_command = "mkdir {}".format(remote_nlp_data_path)
+                remote_command = "mkdir -p {}".format(remote_nlp_data_path)
                 subprocess.call(["ssh", "-o StrictHostKeyChecking=no", "-p {}".format(common_hooks.BRAT_SSH_HOOK.port),
                                  "{}@{}".format(common_hooks.BRAT_SSH_HOOK.username, common_hooks.BRAT_SSH_HOOK.remote_host), remote_command])
 
@@ -193,8 +193,8 @@ def send_notes_to_brat(**kwargs):
 
 def update_brat_db_status(note_id, hdcpupdatedate, directory_location):
     tgt_insert_stmt = """
-         INSERT INTO brat_review_status
-         (HDCOrcaBlobId, brat_review_status, directory_location, job_start, job_status, HDCPUpdateDate)
+         INSERT INTO af2_runs_details
+         (HDCOrcaBlobId, brat_last_modified_date, directory_location, job_start, job_status, HDCPUpdateDate)
          VALUES (%s, %s, %s, %s, %s, %s)
          """
 
@@ -334,7 +334,7 @@ def annotate_clinical_notes(**kwargs):
 
         to_review, skip_review = split_records_by_review_status(batch_records)
 
-        assignment = _divide_tasks(to_review, common_variables.BRAT_DEFAULT_ASSIGNEE)
+        assignment = _divide_tasks(to_review, common_variables.BRAT_ASSIGNEE)
 
         for assignee, to_review_by_assignee in assignment.items():
             send_notes_to_brat(clinical_notes=to_review_by_assignee,
@@ -388,14 +388,13 @@ def _divide_tasks(records, assignees):
     :return: defaultdict(dict, {assignee: blobs json})
     """
 
-    if not assignees:
-        print('No brat assignees were found, assigning to "ALL USERS" by default')
-        return {common_variables.BRAT_DEFAULT_ASSIGNEE: records}
     i=0
     split_dicts = defaultdict(dict)
     for k,v in records.items():
         split_dicts[assignees[i%len(assignees)]][k] = v
         i+=1
+
+    print('{n} brat tasks are assigned to {assignee}'.format(n=len(records), assignee=assignees))
 
     return split_dicts
 
