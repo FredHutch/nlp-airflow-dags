@@ -39,16 +39,16 @@ def log_error_message(blobid, hdcpupdatedate, state, time, error_message):
     return
 
 def save_brat_reviewed_annotation(note_uid, hdcpupdatedate, json_annotation):
-    return save_json_annotation(note_uid, hdcpupdatedate, json_annotation, job_states.BRAT_REVIEWED_ANNOTATION_TYPE)
+    return save_json_annotation(note_uid, hdcpupdatedate, json_annotation, common_variables.BRAT_REVIEWED_ANNOTATION_TYPE)
 
 def save_deid_annotation(note_uid, hdcpupdatedate, json_annotation):
-    return save_json_annotation(note_uid, hdcpupdatedate, json_annotation, job_states.DEID_ANNOTATION_TYPE)
+    return save_json_annotation(note_uid, hdcpupdatedate, json_annotation, common_variables.DEID_ANNOTATION_TYPE)
 
 def save_unreviewed_annotation(note_uid, hdcpupdatedate, json_annotation):
-    return save_json_annotation(note_uid, hdcpupdatedate, json_annotation, job_states.REVIEW_BYPASSED_ANNOTATION_TYPE)
+    return save_json_annotation(note_uid, hdcpupdatedate, json_annotation, common_variables.REVIEW_BYPASSED_ANNOTATION_TYPE)
 
 def save_resynthesis_annotation(note_uid, hdcpupdatedate, json_annotation):
-    return save_json_annotation(note_uid, hdcpupdatedate, json_annotation, job_states.RESYNTH_ANNOTATION_TYPE)
+    return save_json_annotation(note_uid, hdcpupdatedate, json_annotation, common_variables.RESYNTH_ANNOTATION_TYPE)
 
 def save_json_annotation(hdcorcablobid, hdcpupdatedate, json_annotation, annotation_type):
     tgt_insert_stmt = ("INSERT INTO annotations "
