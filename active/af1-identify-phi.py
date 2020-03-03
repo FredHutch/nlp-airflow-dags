@@ -6,6 +6,7 @@ import base64
 
 from airflow.operators.python_operator import PythonOperator
 from airflow.models import DAG
+from pymssql import OperationalError
 
 import utilities.common_variables as common_variables
 import utilities.common_hooks as common_hooks
@@ -257,8 +258,32 @@ def annotate_clinical_notes(**kwargs):
                                                         parameters=(run_id, hdcpupdatedate, common_variables.JOB_RUNNING)):
             blobid = id_row[0]
 
-            note_metadata = common_functions.get_note_and_metadata_dict_from_source(blobid, hdcpupdatedate)
-            patient_data = common_functions.get_patient_data_from_source(note_metadata["patient_id"])
+            try:
+                note_metadata = common_functions.get_note_and_metadata_dict_from_source(blobid, hdcpupdatedate)
+            except OperationalError as e:
+                message = ("A OperationalError occurred while trying to fetch note metadata from source for"
+                           " for blobid: {blobid}".format(blobid=blobid))
+                print(message)
+                common_functions.log_error_and_failure_for_deid_note_job(run_id,
+                                                                         blobid,
+                                                                         hdcpupdatedate,
+                                                                         message,
+                                                                         "Flask ID PHI API")
+                continue
+
+            try:
+                patient_data = common_functions.get_patient_data_from_source(note_metadata["patient_id"])
+            except OperationalError as e:
+                message = ("A OperationalError occurred while trying to fetch patient data"
+                      " for blobid: {blobid} and patientid: {pid}".format(blobid=blobid, pid=note_metadata["patient_id"]))
+                print(message)
+                common_functions.log_error_and_failure_for_deid_note_job(run_id,
+                                                                         blobid,
+                                                                         hdcpupdatedate,
+                                                                         message,
+                                                                         "Flask ID PHI API")
+                continue
+
 
             if note_metadata["patient_id"] is None or patient_data is None:
                 message = "Exception occurred: No PatientID found for BlobId, HDCPUpdateDate: {id},{date}".format(
@@ -267,7 +292,7 @@ def annotate_clinical_notes(**kwargs):
                                                                blobid,
                                                                hdcpupdatedate,
                                                                message,
-                                                               "Flask DeID API")
+                                                               "Flask ID PHI API")
                 continue
 
             # record = { 'hdcorcablobid' : { 'original_note' : json, 'annotated_note' : json } }
@@ -284,7 +309,7 @@ def annotate_clinical_notes(**kwargs):
                 batch_records[blobid] = record
 
             except Exception as e:
-                common_functions.log_error_and_failure_for_deid_note_job(run_id, blobid, hdcpupdatedate, e, "Flask DeID API")
+                common_functions.log_error_and_failure_for_deid_note_job(run_id, blobid, hdcpupdatedate, e, "Flask ID PHI API")
                 continue
 
             common_hooks.AIRFLOW_NLP_DB.run(tgt_update_stmt,
@@ -294,8 +319,18 @@ def annotate_clinical_notes(**kwargs):
                                                   hdcpupdatedate,
                                                   blobid))
 
-            save_note_to_temp_storage(blobid, hdcpupdatedate, note_metadata)
-            save_person_info_to_temp_storage(blobid, hdcpupdatedate, patient_data)
+            try:
+                save_note_to_temp_storage(blobid, hdcpupdatedate, note_metadata)
+                save_person_info_to_temp_storage(blobid, hdcpupdatedate, patient_data)
+            except OperationalError as e:
+                message = ("A OperationalError occurred while trying to save patient data"
+                           " for blobid: {blobid} ".format(blobid=blobid))
+                print(message)
+                common_functions.log_error_and_failure_for_deid_note_job(run_id,
+                                                                         blobid,
+                                                                         hdcpupdatedate,
+                                                                         message,
+                                                                         "Flask ID PHI API")
 
         to_review, skip_review = split_records_by_review_status(batch_records)
 
