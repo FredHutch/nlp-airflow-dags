@@ -3,6 +3,7 @@ import json
 
 from airflow.operators.python_operator import PythonOperator
 from airflow.models import DAG
+from pymssql import OperationalError
 
 import utilities.common_variables as common_variables
 import utilities.common_hooks as common_hooks
@@ -111,14 +112,14 @@ def populate_blobid_in_job_table(**kwargs):
                       "VALUES (%s, %s, %s, %s, %s) ".format(table=common_variables.AF3_RUNS_DETAILS))
 
     for creation_date in datecreated:
-        for row in common_hooks.ANNOTATIONS_DB.get_records(src_select_stmt, parameters=(creation_date,)):
-            if (row[0], row[1]) in complete_jobs:
-                print("Job for note {},{}  originally created on {} has already been completed on {} ."
-                      " Skipping.".format(row[0], row[1], creation_date, complete_jobs[(row[0], row[1])]))
-                continue
+      for row in common_hooks.ANNOTATIONS_DB.get_records(src_select_stmt, parameters=(creation_date,)):
+          if (row[0], row[1]) in complete_jobs:
+              print("Job for note {},{}  originally created on {} has already been completed on {} ."
+                    " Skipping.".format(row[0], row[1], creation_date, complete_jobs[(row[0], row[1])]))
+              continue
 
-            print("Inserting new note job for blobid {}:{}".format(row[0], row[1]))
-            common_hooks.AIRFLOW_NLP_DB.run(tgt_insert_stmt, parameters=(run_id, row[1], row[0], creation_date, common_variables.JOB_RUNNING))
+          print("Inserting new note job for blobid {}:{}".format(row[0], row[1]))
+          common_hooks.AIRFLOW_NLP_DB.run(tgt_insert_stmt, parameters=(run_id, row[1], row[0], creation_date, common_variables.JOB_RUNNING))
 
 
 def _get_resynth_run_details_id_by_creation_date(run_id, date):
@@ -159,11 +160,17 @@ def _get_annotations_by_id_and_created_date(blobid, date):
                       "WHERE date_created = %s and hdcorcablobid = %s "
                       "AND (category = %s "
                       "     OR category = %s)".format(table=common_variables.ANNOTATION_TABLE))
-
-    return common_hooks.ANNOTATIONS_DB.get_records(src_select_stmt, parameters=(
+    try:
+      return common_hooks.ANNOTATIONS_DB.get_records(src_select_stmt, parameters=(
                                              date, blobid, common_variables.REVIEW_BYPASSED_ANNOTATION_TYPE,
                                              common_variables.BRAT_REVIEWED_ANNOTATION_TYPE))
-
+    except OperationalError as e:
+        message = ("An OperationalError occured while trying to fetch annotations from the source data server"
+                   " for blobid {}".format(blobid))
+        print(message)
+        common_functions.log_error_and_failure_for_resynth_note_job(run_id, blobid, hdcpupdatedate, message,
+                                                                  "Get individual note annotations")
+        return None
 
 def _call_resynthesis_api(blobid, hdcpupdatedate, deid_note, deid_annotations, deid_alias):
     results = None
@@ -225,14 +232,20 @@ def _get_patient_data_from_temp(blobid, hdcpupdatedate, patientid):
     pt_select_stmt = ("SELECT HDCOrcaBlobId, HDCPUpdateDate, HDCPersonId, FirstName, MiddleName, LastName"
                       " FROM {table}"
                       " WHERE HDCOrcaBlobId = %s AND HDCPUpdateDate = %s AND HDCPersonId = %s".format(table=common_variables.TEMP_PERSON))
-    ret = (common_hooks.ANNOTATIONS_DB.get_first(pt_select_stmt, parameters=(blobid, hdcpupdatedate, patientid))
+    try:
+      ret = (common_hooks.ANNOTATIONS_DB.get_first(pt_select_stmt, parameters=(blobid, hdcpupdatedate, patientid))
             or (None, None, None, None, None, None))
+    except OperationalError as e:
+        message = ("An OperationalError occured while trying to fetch patient alias data for patientid {}".format(patientid))
+        print(message)
+        return None
     if ret[0] is None:
         print(
             "No Real Patient Name Data found in Temp DB for blobID: "
             "{blobid}, hdcpupdatedate: {date}, patientId: {patientid}".format(
                 blobid=blobid, date=hdcpupdatedate, patientid=patientid))
     return ret
+    
 
 
 def _get_alias_data(patientid):

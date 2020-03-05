@@ -82,7 +82,6 @@ AF5_RUNS_ID = "af5_runs_id"
 # source table
 ANNOTATION_TABLE = 'annotations'
 TEMP_PERSON = 'TEMP_PERSON'
-PatientMap = 'PatientMap'
-
+PatientMap = 'deid.PatientMap'
 # Temp fix for airflow 1
 TEMP_DATE = '2020-01-01 00:00:00.000'
