@@ -78,8 +78,8 @@ def log_error_and_failure_for_resynth_note_job(run_id, blobid, hdcpupdatedate, m
     _log_failure(run_id, blobid, hdcpupdatedate, message, state, tgt_update_stmt)
 
 def log_error_and_failure_for_ner_job(run_id, blobid, hdcpupdatedate, message, state):
-    tgt_update_stmt = ("UPDATE af_ner_runs_details SET ner_status = %s, ner_date = %s " 
-                      "WHERE af_ner_runs_id = %s and HDCPUpdateDate = %s and HDCOrcaBlobID in (%s)")
+    tgt_update_stmt = ("UPDATE af5_runs_details SET ner_status = %s, ner_date = %s " 
+                      "WHERE af5_runs_id = %s and HDCPUpdateDate = %s and HDCOrcaBlobID in (%s)")
     _log_failure(run_id, blobid, hdcpupdatedate, message, state, tgt_update_stmt)
 
 def _log_failure(run_id, blobid, hdcpupdatedate, message, state, update_stmt):
@@ -173,7 +173,7 @@ def _get_most_recent_successful_note_job_update_date(blobid, sourcetable, update
 
 def _get_most_recent_ner_start_date(**kwargs):
     select_stmt = ("SELECT MAX(job_start) " \
-                   "FROM af_ner_runs " \
+                   "FROM af5_runs " \
                    "WHERE job_status = %s ")
     most_recent_ner_start_date = (AIRFLOW_NLP_DB.run(select_stmt, parameters=(common_variables.JOB_RUNNING,)) or (None,))
     return most_recent_ner_start_date[0]

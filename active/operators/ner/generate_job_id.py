@@ -65,7 +65,7 @@ def _get_blobs_since_date(date, state, **kwargs):
     tgt_update_stmt = "SELECT distinct hdcorcablobid, resynth_date " \
                       "FROM {table} " \
                       "WHERE resynth_date >= %s " \
-                      "AND resynth_status = %s ".format(table=common_variables.AF5_RUNS_DETAILS)
+                      "AND resynth_status = %s ".format(table=common_variables.AF3_RUNS_DETAILS)
     return common_hooks.AIRFLOW_NLP_DB.get_records(tgt_update_stmt, parameters=(date, state))
 
 
