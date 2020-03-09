@@ -325,6 +325,7 @@ def resynthesize_notes_marked_as_deid(**kwargs):
                                             updatedate_type='hdcpupdatedate',
                                             update_date=hdcpupdatedate,
                                             payload=json_obj_to_store,
+                                            connection=common_hooks.MYSTOR,
                                             key=common_functions.get_default_keyname(blobid,
                                                                            prefix=common_hooks.ANNOTATION_PREFIX))
 
