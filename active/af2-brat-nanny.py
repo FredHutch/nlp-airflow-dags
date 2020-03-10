@@ -26,7 +26,7 @@ dag = DAG(dag_id='af2-brat-nanny',
 def scan_and_update_notes_for_completion(**kwargs):
 
     # specifying it as a literal regex gets airflows ssh cmd recognize the wildcards in the filepath.
-    remote_command = r'egrep -l "^T[0-9]+[[:space:]]+.*REVIEW_COMPLETE" {location}/*/*.ann'.format(
+    remote_command = r'egrep -l "^T[0-9]+[[:space:]]+.*REVIEW_COMPLETE" {location}/*/*/*.ann'.format(
         location=common_hooks.BRAT_NLP_FILEPATH)
 
     complete_list = subprocess.getoutput(
