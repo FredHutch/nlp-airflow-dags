@@ -1,6 +1,5 @@
 import json
 from datetime import datetime
-from operators.ner.generate_job_id import _get_last_ner_update_date
 
 import utilities.common_hooks as common_hooks
 import utilities.common_variables as common_variables
@@ -8,14 +7,14 @@ import utilities.common_functions as common_functions
 
 
 def call_flask_blob_nlp_preprocessing(blobid, hdcpupdatedate, note):
-    return call_flask_blob_nlp_endpoint(blobid, hdcpupdatedate, note, "preprocess")
+    return call_flask_blob_nlp_endpoint(blobid, hdcpupdatedate, note, "spacy")
 
 
 def call_flask_blob_nlp_sectionerex(blobid, hdcpupdatedate, note):
     return call_flask_blob_nlp_endpoint(blobid, hdcpupdatedate, note, "sectionerex")
 
 def call_flask_blob_nlp_medlp(blobid, hdcpupdatedate, note):
-    return call_flask_blob_nlp_endpoint(blobid, hdcpupdatedate, note, "medlp")
+    return call_flask_blob_nlp_endpoint(blobid, hdcpupdatedate, note, "compmed")
 
 
 def call_flask_blob_nlp_endpoint(blobid, hdcpupdatedate, note, endpoint):
