@@ -6,8 +6,8 @@ import base64
 
 from airflow.operators.python_operator import PythonOperator
 from airflow.models import DAG
-from pymssql import OperationalError
 
+from operators.identify_phi import dequeue_blobid_from_process_queue
 import utilities.common_variables as common_variables
 import utilities.common_hooks as common_hooks
 import utilities.common_functions as common_functions
@@ -20,7 +20,7 @@ args = {
     'retry_delay': timedelta(minutes=5),
 }
 
-dag = DAG(dag_id='af1-identify-phi',
+dag = DAG(dag_id='af1-dequeue-and-identify-phi',
           catchup=False,
           default_args=args,
           dagrun_timeout=timedelta(seconds=30))
@@ -28,11 +28,8 @@ dag = DAG(dag_id='af1-identify-phi',
 
 def generate_job_id(**kwargs):
     # get last update date from last completed run
-    tgt_select_stmt = "SELECT max(HDCPUpdateDate) FROM {table} WHERE job_status = %s".\
-                      format(table=common_variables.AF1_RUNS)
-    update_date_from_last_run = common_hooks.AIRFLOW_NLP_DB.\
-                      get_first(tgt_select_stmt, parameters=(common_variables.JOB_COMPLETE,))[0].\
-                      strftime(common_variables.DT_FORMAT)[:-3]
+    tgt_select_stmt = "SELECT max(HDCPUpdateDate) FROM {table} WHERE job_status = %s".format(table=common_variables.AF1_RUNS)
+    update_date_from_last_run = common_hooks.AIRFLOW_NLP_DB.get_first(tgt_select_stmt, parameters=(common_variables.JOB_COMPLETE,))[0]
 
     print("last updatedate was {}".format(update_date_from_last_run))
     if update_date_from_last_run is None:
@@ -45,10 +42,11 @@ def generate_job_id(**kwargs):
 
     # get last update date from source since last successful run
     # then pull record id with new update date from source
-    src_select_stmt = ("SELECT HDCPUpdateDate, count(*) "
-                      "FROM vClinicalNoteDiscovery "
-                      "WHERE HDCPUpdateDate >= %s "
-                      "GROUP BY HDCPUpdateDate")
+    blobid, hdcpupdatedate = dequeue_blobid_from_process_queue()
+    if blobid is None:
+        print("No new records found since last update date: {}".format(update_date_from_last_run))
+        exit()
+
     tgt_insert_stmt = ("INSERT INTO {table} "
                       "({run_id}, HDCPUpdateDate, record_counts, job_start, job_status) "
                       "VALUES (%s, %s, %s, %s, %s)".format(table=common_variables.AF1_RUNS,
@@ -56,69 +54,26 @@ def generate_job_id(**kwargs):
                        )
 
     job_start_date = datetime.now().strftime(common_variables.DT_FORMAT)[:-3]
-    hdcpupdatedates = []
-    total_job_count = common_variables.MAX_BATCH_SIZE
 
-    # temp fix: string formatting for the most recent update date
-    # (note right now this has to be hard coded to earlier than 2020-01-09 ... or else it will hang)
+    common_hooks.AIRFLOW_NLP_DB.run(tgt_insert_stmt, parameters=(new_run_id, hdcpupdatedate, 1, job_start_date, common_variables.JOB_RUNNING))
+    print("Job Batch for hdcpupdatedate: {}  contains {} notes."
+          " {} total notes scheduled".format(new_run_id, 1, 1))
 
-    temp_date = common_variables.TEMP_DATE
-    if update_date_from_last_run >= temp_date:
-        update_date_from_last_run = temp_date
-
-    for row in common_hooks.SOURCE_NOTE_DB.get_records(src_select_stmt, parameters=(update_date_from_last_run,)):
-        hdcpupdatedates.append(row[0])
-        common_hooks.AIRFLOW_NLP_DB.run(tgt_insert_stmt, parameters=(new_run_id, row[0], row[1], job_start_date, common_variables.JOB_RUNNING))
-        print("Job Batch for hdcpupdatedate: {}  contains {} notes."
-              " {} total notes scheduled".format(row[0], row[1], (common_variables.MAX_BATCH_SIZE - total_job_count)))
-        total_job_count -= row[1]
-        if total_job_count <= 0:
-            print("Job Batch for hdcpupdatedate: {}  contains {} notes"
-                  " and exceeds cumulative total per-run Job Size of {}."
-                  " Breaking early.".format(row[0], row[1], common_variables.MAX_BATCH_SIZE))
-            break
-
-    if len(hdcpupdatedates) == 0:
-        print("No new records found since last update date: {}".format(update_date_from_last_run))
-        exit()
-
-    return new_run_id, hdcpupdatedates
+    return new_run_id, blobid, hdcpupdatedate
 
 
 def populate_blobid_in_job_table(**kwargs):
     # get last update date
-    (run_id, hdcpupdatedates) = kwargs['ti'].xcom_pull(task_ids='generate_job_id')
-
-    # get record id to be processed
-    src_select_stmt = "SELECT DISTINCT top {} HDCOrcaBlobId FROM vClinicalNoteDiscovery WHERE HDCPUpdateDate = %s".\
-                    format(common_variables.MAX_BATCH_SIZE)
-    # get completed jobs so that we do not repeat completed work
-    screen_complete_stmt = ("SELECT HDCOrcaBlobId, HDCPUpdateDate, annotation_date from {table} "
-                           "WHERE annotation_status = %s".format(table=common_variables.AF1_RUNS_DETAILS))
-    complete_job_rows = common_hooks.AIRFLOW_NLP_DB.get_records(screen_complete_stmt, parameters=(common_variables.JOB_COMPLETE,))
-    complete_jobs = {(row[0], row[1]): row[2] for row in complete_job_rows}
+    (run_id, blobid, hdcpupdatedate) = kwargs['ti'].xcom_pull(task_ids='generate_job_id')   # get completed jobs so that we do not repeat completed work
 
     tgt_insert_stmt = ("INSERT INTO {table} ({run_id}, HDCPUpdateDate, HDCOrcaBlobId, annotation_status) "
                       "VALUES (%s, %s, %s, %s)".format(table=common_variables.AF1_RUNS_DETAILS,
                                                        run_id=common_variables.AF1_RUNS_ID))
 
-    total_job_count = common_variables.MAX_BATCH_SIZE
-    for hdcpupdatedate in hdcpupdatedates:
-        for row in common_hooks.SOURCE_NOTE_DB.get_records(src_select_stmt, parameters=(hdcpupdatedate,)):
-            print("checking ID: {} for previous completion.".format(row[0]))
-            if (row[0], hdcpupdatedate) in complete_jobs.keys():
-                print("Job for note {},{} has already been completed on {} . "
-                      "Skipping.".format(row[0], hdcpupdatedate, complete_jobs[(row[0], hdcpupdatedate)]))
-                continue
+    common_hooks.AIRFLOW_NLP_DB.run(tgt_insert_stmt,
+                                    parameters=(run_id, hdcpupdatedate, blobid, common_variables.JOB_RUNNING))
 
-            common_hooks.AIRFLOW_NLP_DB.run(tgt_insert_stmt, parameters=(run_id, hdcpupdatedate, row[0], common_variables.JOB_RUNNING))
-            total_job_count -= 1
-            if total_job_count == 0:
-                print("Job Batch cumulative total per-run Job Size of {batch_limit}."
-                      " Breaking early without processing {blobid}"\
-                      .format(batch_limit=common_variables.MAX_BATCH_SIZE, blobid=row[0]))
-                break
-
+    return run_id, blobid, hdcpupdatedate
 
 
 def send_notes_to_brat(**kwargs):
@@ -135,16 +90,18 @@ def send_notes_to_brat(**kwargs):
                 "ssh {}@{} {}".format(common_hooks.BRAT_SSH_HOOK.username, common_hooks.BRAT_SSH_HOOK.remote_host, remote_command))
 
             if is_datefolder_found != 'found':
-                remote_command = "mkdir -p {}".format(remote_nlp_data_path)
+                remote_command = "mkdir {}".format(remote_nlp_data_path)
                 subprocess.call(["ssh", "-o StrictHostKeyChecking=no", "-p {}".format(common_hooks.BRAT_SSH_HOOK.port),
                                  "{}@{}".format(common_hooks.BRAT_SSH_HOOK.username, common_hooks.BRAT_SSH_HOOK.remote_host), remote_command])
 
         # send original notes to brat
         remote_command = """
                          umask 002;
+
                          if [[ -f {remotePath}/{filename}.txt ]]; then
                            rm {remotePath}/{filename}.txt
                          fi
+
                          echo "{data}" | base64 -d - > {remotePath}/{filename}.txt;
         """.format(
             data=str(base64.b64encode(notes['original_note']['extract_text'].encode('utf-8'))).replace("b'",
@@ -170,6 +127,7 @@ def send_notes_to_brat(**kwargs):
         if len(phi_anno_data) > 0:
             remote_command = """
                      umask 002;
+
                      echo '{data}' | base64 -d -  > {remotePath}/{filename}.ann;
             """.format(
                 data=str(base64.b64encode("\r\n".join(
@@ -190,8 +148,8 @@ def send_notes_to_brat(**kwargs):
 
 def update_brat_db_status(note_id, hdcpupdatedate, directory_location):
     tgt_insert_stmt = """
-         INSERT INTO af2_runs_details
-         (HDCOrcaBlobId, brat_last_modified_date, directory_location, job_start, job_status, HDCPUpdateDate)
+         INSERT INTO brat_review_status
+         (HDCOrcaBlobId, brat_review_status, directory_location, job_start, job_status, HDCPUpdateDate)
          VALUES (%s, %s, %s, %s, %s, %s)
          """
 
@@ -234,7 +192,7 @@ def save_person_info_to_temp_storage(blobid, hdcpupdatedate, patient_data):
 
 def annotate_clinical_notes(**kwargs):
     # get last update date
-    (run_id, hdcpupdatedates) = kwargs['ti'].xcom_pull(task_ids='generate_job_id')
+    (run_id, blobid, hdcpupdatedate) = kwargs['ti'].xcom_pull(task_ids='populate_blobid_in_job_table')
     tgt_select_stmt = ("SELECT HDCOrcaBlobId "
                       "FROM {table} "
                       "WHERE {run_id} = %s "
@@ -248,105 +206,66 @@ def annotate_clinical_notes(**kwargs):
                       "AND HDCOrcaBlobId in (%s)".format(table=common_variables.AF1_RUNS_DETAILS,
                                                          run_id=common_variables.AF1_RUNS_ID))
 
-    for hdcpupdatedate in hdcpupdatedates:
-        batch_records = {}
-        hdcpupdatedate = hdcpupdatedate.strftime(common_variables.DT_FORMAT)[:-3]
-        for id_row in common_hooks.AIRFLOW_NLP_DB.get_records(tgt_select_stmt,
-                                                        parameters=(run_id, hdcpupdatedate, common_variables.JOB_RUNNING)):
-            blobid = id_row[0]
 
-            try:
-                note_metadata = common_functions.get_note_and_metadata_dict_from_source(blobid, hdcpupdatedate)
-            except OperationalError as e:
-                message = ("A OperationalError occurred while trying to fetch note metadata from source for"
-                           " for blobid: {blobid}".format(blobid=blobid))
-                print(message)
-                common_functions.log_error_and_failure_for_deid_note_job(run_id,
-                                                                         blobid,
-                                                                         hdcpupdatedate,
-                                                                         message,
-                                                                         "Flask ID PHI API")
-                continue
+    batch_records = {}
 
-            try:
-                patient_data = common_functions.get_patient_data_from_source(note_metadata["patient_id"])
-            except OperationalError as e:
-                message = ("A OperationalError occurred while trying to fetch patient data"
-                      " for blobid: {blobid} and patientid: {pid}".format(blobid=blobid, pid=note_metadata["patient_id"]))
-                print(message)
-                common_functions.log_error_and_failure_for_deid_note_job(run_id,
-                                                                         blobid,
-                                                                         hdcpupdatedate,
-                                                                         message,
-                                                                         "Flask ID PHI API")
-                continue
+    note_metadata = common_functions.get_note_and_metadata_dict_from_source(blobid, hdcpupdatedate)
+    patient_data = common_functions.get_patient_data_from_source(note_metadata["patient_id"])
 
+    if note_metadata["patient_id"] is None or patient_data is None:
+        message = "Exception occurred: No PatientID found for BlobId, HDCPUpdateDate: {id},{date}".format(
+            id=blobid, date=hdcpupdatedate)
+        common_hooks.log_error_and_failure_for_deid_note_job(run_id,
+                                                       blobid,
+                                                       hdcpupdatedate,
+                                                       message,
+                                                       "Flask DeID API")
+        exit()
 
-            if note_metadata["patient_id"] is None or patient_data is None:
-                message = "Exception occurred: No PatientID found for BlobId, HDCPUpdateDate: {id},{date}".format(
-                    id=blobid, date=hdcpupdatedate)
-                common_functions.log_error_and_failure_for_deid_note_job(run_id,
-                                                               blobid,
-                                                               hdcpupdatedate,
-                                                               message,
-                                                               "Flask ID PHI API")
-                continue
+    # record = { 'hdcorcablobid' : { 'original_note' : json, 'annotated_note' : json } }
+    record = dict()
+    batch_records[blobid] = dict()
+    record['original_note'] = {"extract_text": "{}".format(note_metadata["blob_contents"]),
+                               "annotation_by_source": True}
+    record['hdcpupdatedate'] = hdcpupdatedate
+    try:
+        resp = common_hooks.DEID_NLP_API_HOOK.run("/identifyphi", data=json.dumps(record['original_note']),
+                            headers={"Content-Type": "application/json"})
+        record['annotated_note'] = json.loads(resp.content)
+        annotation_status = common_variables.JOB_COMPLETE
+        batch_records[blobid] = record
 
-            # record = { 'hdcorcablobid' : { 'original_note' : json, 'annotated_note' : json } }
-            record = dict()
-            batch_records[blobid] = dict()
-            record['original_note'] = {"extract_text": "{}".format(note_metadata["blob_contents"]),
-                                       "annotation_by_source": True}
-            record['hdcpupdatedate'] = hdcpupdatedate
-            try:
-                resp = common_hooks.DEID_NLP_API_HOOK.run("/identifyphi", data=json.dumps(record['original_note']),
-                                    headers={"Content-Type": "application/json"})
-                record['annotated_note'] = json.loads(resp.content)
-                annotation_status = common_variables.JOB_COMPLETE
-                batch_records[blobid] = record
+    except Exception as e:
+        common_functions.log_error_and_failure_for_deid_note_job(run_id, blobid, hdcpupdatedate, e, "Flask DeID API")
+        exit()
 
-            except Exception as e:
-                common_functions.log_error_and_failure_for_deid_note_job(run_id, blobid, hdcpupdatedate, e, "Flask ID PHI API")
-                continue
+    common_hooks.AIRFLOW_NLP_DB.run(tgt_update_stmt,
+                              parameters=(annotation_status,
+                                          datetime.now().strftime(common_variables.DT_FORMAT)[:-3],
+                                          run_id,
+                                          hdcpupdatedate,
+                                          blobid))
 
-            common_hooks.AIRFLOW_NLP_DB.run(tgt_update_stmt,
-                                      parameters=(annotation_status,
-                                                  datetime.now().strftime(common_variables.DT_FORMAT)[:-3],
-                                                  run_id,
-                                                  hdcpupdatedate,
-                                                  blobid))
+    save_note_to_temp_storage(blobid, hdcpupdatedate, note_metadata)
+    save_person_info_to_temp_storage(blobid, hdcpupdatedate, patient_data)
 
-            try:
-                save_note_to_temp_storage(blobid, hdcpupdatedate, note_metadata)
-                save_person_info_to_temp_storage(blobid, hdcpupdatedate, patient_data)
-            except OperationalError as e:
-                message = ("A OperationalError occurred while trying to save patient data"
-                           " for blobid: {blobid} ".format(blobid=blobid))
-                print(message)
-                common_functions.log_error_and_failure_for_deid_note_job(run_id,
-                                                                         blobid,
-                                                                         hdcpupdatedate,
-                                                                         message,
-                                                                         "Flask ID PHI API")
-
-        to_review, skip_review = split_records_by_review_status(batch_records)
-
+    to_review, skip_review = split_records_by_review_status(batch_records)
+    if _review_criterion(batch_records[blobid]):
         assignment = _divide_tasks(to_review, common_variables.BRAT_ASSIGNEE)
 
         for assignee, to_review_by_assignee in assignment.items():
             send_notes_to_brat(clinical_notes=to_review_by_assignee,
-                               datafolder='{assignee}/{date}'.format(assignee=assignee,
-                                                                     date=hdcpupdatedate[:10]))
+                               datafolder='{assignee}/{date}'.format(assignee=assignee, date=hdcpupdatedate.strftime('%Y-%m-%d')))
             save_deid_annotations(to_review_by_assignee)
 
-        save_unreviewed_annotations(skip_review)
+    else:
+        save_unreviewed_annotations(batch_records[blobid])
 
     tgt_update_stmt = "UPDATE {table} " \
                       "SET job_end = %s, job_status = %s " \
                       "WHERE {run_id} = %s".format(table=common_variables.AF1_RUNS,
                                                    run_id=common_variables.AF1_RUNS_ID)
-    common_hooks.AIRFLOW_NLP_DB.run(tgt_update_stmt, parameters=(datetime.now().strftime(common_variables.DT_FORMAT)[:-3],
-                                                                 common_variables.JOB_COMPLETE, run_id))
+    common_hooks.AIRFLOW_NLP_DB.run(tgt_update_stmt, parameters=(datetime.now(), common_variables.JOB_COMPLETE, run_id))
 
 
 def save_deid_annotations(annotation_records):
@@ -385,13 +304,14 @@ def _divide_tasks(records, assignees):
     :return: defaultdict(dict, {assignee: blobs json})
     """
 
+    if not assignees:
+        print('No brat assignees were found, assigning to "ALL USERS" by default')
+        return {common_variables.BRAT_ASSIGNEE: records}
     i=0
     split_dicts = defaultdict(dict)
     for k,v in records.items():
         split_dicts[assignees[i%len(assignees)]][k] = v
         i+=1
-
-    print('{n} brat tasks are assigned to {assignee}'.format(n=len(records), assignee=assignees))
 
     return split_dicts
 
