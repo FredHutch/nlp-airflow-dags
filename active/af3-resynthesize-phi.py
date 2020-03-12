@@ -112,15 +112,22 @@ def populate_blobid_in_job_table(**kwargs):
                       "VALUES (%s, %s, %s, %s, %s) ".format(table=common_variables.AF3_RUNS_DETAILS))
 
     for creation_date in datecreated:
-      for row in common_hooks.ANNOTATIONS_DB.get_records(src_select_stmt, parameters=(creation_date,)):
-          if (row[0], row[1]) in complete_jobs:
-              print("Job for note {},{}  originally created on {} has already been completed on {} ."
-                    " Skipping.".format(row[0], row[1], creation_date, complete_jobs[(row[0], row[1])]))
-              continue
+        try:
+            for row in common_hooks.ANNOTATIONS_DB.get_records(src_select_stmt, parameters=(creation_date,)):
+                if (row[0], row[1]) in complete_jobs:
+                    print("Job for note {},{}  originally created on {} has already been completed on {} ."
+                            " Skipping.".format(row[0], row[1], creation_date, complete_jobs[(row[0], row[1])]))
+                    continue
 
-          print("Inserting new note job for blobid {}:{}".format(row[0], row[1]))
-          common_hooks.AIRFLOW_NLP_DB.run(tgt_insert_stmt, parameters=(run_id, row[1], row[0], creation_date, common_variables.JOB_RUNNING))
-
+                print("Inserting new note job for blobid {}:{}".format(row[0], row[1]))
+                common_hooks.AIRFLOW_NLP_DB.run(tgt_insert_stmt, parameters=(run_id, row[1], row[0], creation_date, common_variables.JOB_RUNNING))
+        except OperationalError as e:
+            message = ("An OperationalError occured while trying to fetch potential annotations from the source data server"
+                   " for select statement {}".format(src_select_stmt))
+            print(message)
+            common_functions.log_error_and_failure_for_resynth_note_job(run_id, 'Unknown', 'Unknown', message,
+                                                                  "Get potential annotations")                                         time=time_of_error, error_message=str(ex))
+        
 
 def _get_resynth_run_details_id_by_creation_date(run_id, date):
     tgt_select_stmt = ("SELECT hdcorcablobid, hdcpupdatedate FROM {table} "
@@ -139,7 +146,7 @@ def _update_resynth_run_details_to_complete(run_id, blobid, date):
 
 def _update_resynth_run_details_to_failed(run_id, blobid, date):
     print("updating blob {} to failed".format(blobid))
-    return _update_resynth_run_details_by_id_and_date(run_id, blobid, date, JOB_FAILURE)
+    return _update_resynth_run_details_by_id_and_date(run_id, blobid, date, common_variables.JOB_FAILURE)
 
 
 def _update_resynth_run_details_by_id_and_date(run_id, blobid, date, state):
