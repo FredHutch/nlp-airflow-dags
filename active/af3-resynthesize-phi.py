@@ -126,7 +126,7 @@ def populate_blobid_in_job_table(**kwargs):
                    " for select statement {}".format(src_select_stmt))
             print(message)
             common_functions.log_error_and_failure_for_resynth_note_job(run_id, 'Unknown', 'Unknown', message,
-                                                                  "Get potential annotations")                                         time=time_of_error, error_message=str(ex))
+                                                                  "Get potential annotations")
         
 
 def _get_resynth_run_details_id_by_creation_date(run_id, date):
