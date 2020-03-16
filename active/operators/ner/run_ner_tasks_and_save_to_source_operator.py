@@ -17,6 +17,8 @@ def run_ner_task(**kwargs):
         record_processed = 0
 
         note = common_functions.read_from_storage(blobid, connection=common_hooks.MYSTOR, blob_prefix=common_hooks.ANNOTATION_PREFIX)
+        # temp fix due to the extra json.dumps in write_to_storage()
+        note = json.loads(json.loads(note))
         preprocessing_results = flask_blob_nlp.call_flask_blob_nlp_preprocessing(blobid, hdcpupdatedate, note['resynthesized_notes'])
         sectionerx_results = flask_blob_nlp.call_flask_blob_nlp_sectionerex(blobid, hdcpupdatedate, note['resynthesized_notes'])
 
