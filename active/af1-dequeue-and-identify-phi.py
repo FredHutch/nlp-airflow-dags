@@ -148,15 +148,16 @@ def send_notes_to_brat(**kwargs):
 
 def update_brat_db_status(note_id, hdcpupdatedate, directory_location):
     tgt_insert_stmt = """
-         INSERT INTO brat_review_status
-         (HDCOrcaBlobId, brat_review_status, directory_location, job_start, job_status, HDCPUpdateDate)
-         VALUES (%s, %s, %s, %s, %s, %s)
-         """
+             INSERT INTO af2_runs_details
+             (HDCOrcaBlobId, brat_last_modified_date, directory_location, job_start, job_status, HDCPUpdateDate)
+             VALUES (%s, %s, %s, %s, %s, %s)
+             """
 
     job_start_date = datetime.now()
     common_hooks.AIRFLOW_NLP_DB.run(tgt_insert_stmt,
-                              parameters=(note_id, job_start_date, directory_location, job_start_date, common_variables.BRAT_PENDING,
-                                          hdcpupdatedate))
+                                    parameters=(note_id, job_start_date, directory_location, job_start_date,
+                                                common_variables.BRAT_PENDING,
+                                                hdcpupdatedate))
 
 
 def save_note_to_temp_storage(blobid, hdcpupdatedate, metadata_dict):
