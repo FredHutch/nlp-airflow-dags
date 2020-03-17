@@ -7,7 +7,7 @@ def report_stale_brat_jobs(upstream_task, **kwargs):
         """
         The following files are over {threshold} old, and are considered STALE!
         Please check the following files in Brat:\n
-        """.format(threshold=common_variables.STALE_THRESHOLD)
+        """.format(threshold=common_variables.REVIEW_STALE_THRESHOLD)
     (run_id, date_stamp, check_date, stale_brat_files) = kwargs['ti'].xcom_pull(task_ids=upstream_task)
     print("fetched xcoms: {run_id}, {date_stamp}, {check_date}, {stale_brat_files}".format(run_id=run_id, date_stamp=date_stamp, check_date=check_date, stale_brat_files=stale_brat_files))
     email_meat = "\n".join(["{fp}    -    {elapsed_time} old".format(fp=stale_file['File'], elapsed_time=stale_file['ElapsedTime']) for stale_file in stale_brat_files])

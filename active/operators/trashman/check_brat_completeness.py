@@ -11,27 +11,33 @@ from operators.trashman import trashman_utilities
 def check_brat_completeness(upstream_task, **kwargs):
     """
     Checks contents in brat for based on modification times within brat file system.
+    return formatted dictionary of results if found
     """
     (run_id, date_stamp) = kwargs['ti'].xcom_pull(task_ids=upstream_task)
     #TODO: Generate a job_id and pair with staleness check from DB.
     check_date = trashman_utilities.safe_datetime_strp(date_stamp, '%Y-%m-%d')
-    complete_brat_files = _get_complete_brat_notes_from_db()
+    complete_brat_files = _get_complete_brat_notes_from_db(check_date)
     if not complete_brat_files:
         print("No completed brat files found to be deleted.")
-        return
+        exit(1)
 
     write_run_details(run_id, check_date, complete_brat_files)
 
-def _get_complete_brat_notes_from_db():
+    return (run_id, complete_brat_files)
+
+def _get_complete_brat_notes_from_db(check_date):
     src_select_stmt = ("SELECT b.{brat_id}, b.brat_last_modified_date, b.directory_location, b.hdcorcablobid, b.hdcpupdatedate "
                         "FROM {brat_table} as b "
                         "LEFT JOIN {job_table} as j "
                         "  ON b.{brat_id} = j.{brat_id} "
                         "WHERE b.job_status = '{complete_status}' "
-                        "AND j.brat_id is NULL ".format(brat_table=common_variables.AF4_SOURCE_BRAT_TABLE,
+                        "AND b.brat_last_modified_date >=  dateadd(day,{threshold}},{current_date}) "
+                        "AND j.{brat_id} is NULL ".format(brat_table=common_variables.AF4_SOURCE_BRAT_TABLE,
                                                         brat_id = common_variables.AF4_SOURCE_BRAT_ID,
                                                         job_table=common_variables.AF4_COMPLETE_BRAT_TABLE,
-                                                        complete_status=common_variables.BRAT_READY_TO_EXTRACT))
+                                                        complete_status=common_variables.BRAT_COMPLETE,
+                                                        threshold=common_variables.COMPLETE_STALE_THRESHOLD,
+                                                        current_date=check_date))
 
     completed_notes = (common_hooks.AIRFLOW_NLP_DB.get_records(src_select_stmt) or [])
     dict_notes = [{'brat_id': n[0],
@@ -43,15 +49,15 @@ def _get_complete_brat_notes_from_db():
     return dict_notes
 
 
-def write_run_details(run_id, check_date, brat_files, stale_threshold=common_variables.STALE_THRESHOLD):
+def write_run_details(run_id, check_date, brat_files, stale_threshold=common_variables.COMPLETE_STALE_THRESHOLD):
     """
     Writes run statistics on stale v. nonstale files in brat. Used to track modification over time.
     param: brat_files: list of dicts containing File, ModifiedDate, ElapsedTime, and IsStale
     """
     tgt_insert_stmt = ("INSERT INTO {job_table}"
                        "({run_id}, "
-                       "stale_threshold_days,"
-                       " stale_check_date,"
+                       " stale_threshold_days,"
+                       " job_start_date,"
                        " directory_location,"
                        " brat_last_modified_date,"
                        " job_status,"
@@ -63,12 +69,12 @@ def write_run_details(run_id, check_date, brat_files, stale_threshold=common_var
                                                                             brat_id=common_variables.AF4_SOURCE_BRAT_ID))
     #write job_id, count of stale vs nonstale to db, and threshold parameter
     for file in brat_files:
-        common_hooks.NLP_DB.run(tgt_insert_stmt,
+        common_hooks.AIRFLOW_NLP_DB.run(tgt_insert_stmt,
                           parameters=(run_id,
                                       stale_threshold.days,
                                       check_date,
                                       file['directory_location'],
-                                      file['last_modified_date'],
+                                      file['last_update_date'],
                                       common_variables.JOB_RUNNING,
                                       file['brat_id'],
                                       file['hdcorcablobid'],

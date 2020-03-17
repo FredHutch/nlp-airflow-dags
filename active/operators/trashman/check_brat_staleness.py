@@ -36,7 +36,10 @@ def check_brat_staleness(upstream_task, **kwargs):
     return run_id, date_stamp, check_date, stale_brat_files
 
 
-def write_run_details(run_id, check_date, brat_files, stale_threshold=common_variables.STALE_THRESHOLD):
+def write_run_details(run_id,
+                      check_date,
+                      brat_files,
+                      stale_threshold=common_variables.REVIEW_STALE_THRESHOLD):
     """
     Writes run statistics on stale v. nonstale files in brat. Used to track modification over time.
     param: brat_files: list of dicts containing File, ModifiedDate, ElapsedTime, and IsStale

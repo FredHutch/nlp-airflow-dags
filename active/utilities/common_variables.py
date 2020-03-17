@@ -13,8 +13,8 @@ os.environ['OS_USERNAME'] = Variable.get('OS_USERNAME')
 
 # safety in hardcoding for now - TODO - should eventually be changed to an ENV VAR
 # threshold for af4
-STALE_THRESHOLD = timedelta(days=int(Variable.get("STALE_THRESHOLD", 1)))
-
+COMPLETE_STALE_THRESHOLD = timedelta(days=int(Variable.get("COMPLETE_STALE_THRESHOLD", 7)))
+REVIEW_STALE_THRESHOLD = timedelta(days=int(Variable.get("REVIEW_STALE_THRESHOLD", 3)))
 #the default 'beginning time' for any date-based choosing strategies
 DT_FORMAT = "%Y-%m-%d %H:%M:%S.%f"
 EPOCH = Variable.get("EPOCH", datetime(1970, 1, 1).strftime(DT_FORMAT)[:-3])

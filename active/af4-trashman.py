@@ -64,7 +64,7 @@ send_stale_brat_email = trashman.generate_email_operator(dag, 'send_stale_brat_e
 remove_complete_brat_jobs = PythonOperator(task_id='remove_complete_brat_jobs',
                               provide_context=True,
                               python_callable=trashman.remove_complete_brat_jobs,
-                              op_args='check_brat_staleness',
+                              op_args={'check_brat_completeness'},
                               trigger_rule=TriggerRule.ALL_SUCCESS,
                               dag=dag)
 
