@@ -124,6 +124,7 @@ def populate_blobid_in_job_table(**kwargs):
 def send_notes_to_brat(**kwargs):
     clinical_notes = kwargs['clinical_notes']
     datafolder = kwargs['datafolder']
+    hdcpupdatedate = kwargs['hdcpupdatedate']
     remote_nlp_data_path = "{}/{}".format(common_hooks.BRAT_NLP_FILEPATH, datafolder)
 
     record_processed = 0
@@ -131,10 +132,10 @@ def send_notes_to_brat(**kwargs):
         # create a subfolder for hdcpupdatedate
         if record_processed == 0:
             remote_command = "[ -d {} ] && echo 'found'".format(remote_nlp_data_path)
-            is_datefolder_found = subprocess.getoutput(
+            is_folder_found = subprocess.getoutput(
                 "ssh {}@{} {}".format(common_hooks.BRAT_SSH_HOOK.username, common_hooks.BRAT_SSH_HOOK.remote_host, remote_command))
 
-            if is_datefolder_found != 'found':
+            if is_folder_found != 'found':
                 remote_command = "mkdir -p {}".format(remote_nlp_data_path)
                 subprocess.call(["ssh", "-o StrictHostKeyChecking=no", "-p {}".format(common_hooks.BRAT_SSH_HOOK.port),
                                  "{}@{}".format(common_hooks.BRAT_SSH_HOOK.username, common_hooks.BRAT_SSH_HOOK.remote_host), remote_command])
@@ -165,8 +166,8 @@ def send_notes_to_brat(**kwargs):
                 line += 1
                 phi_anno_data.append(
                     "T{}\t{} {} {}\t{}".format(line, j['type'], j['start'], j['end'], j['text']))
-
-        full_file_name = "".join(map(str, [remote_nlp_data_path, "/", hdcorcablobid, ".ann"]))
+        annotation_name = "_".join(map(str, [hdcorcablobid, hdcpupdatedate]))
+        full_file_name = "".join(map(str, [remote_nlp_data_path, "/", annotation_name, ".ann"]))
         if len(phi_anno_data) > 0:
             remote_command = """
                      umask 002;
@@ -335,8 +336,8 @@ def annotate_clinical_notes(**kwargs):
 
         for assignee, to_review_by_assignee in assignment.items():
             send_notes_to_brat(clinical_notes=to_review_by_assignee,
-                               datafolder='{assignee}/{date}'.format(assignee=assignee,
-                                                                     date=hdcpupdatedate[:10]))
+                               datafolder='{assignee}'.format(assignee=assignee),
+                               hdcpupdatedate=hdcpupdatedate[:10])
             save_deid_annotations(to_review_by_assignee)
 
         save_unreviewed_annotations(skip_review)
