@@ -201,7 +201,7 @@ def write_to_storage(blobid, sourcetable, job_state_type, updatedate_type, updat
     print("Verifying storage status for blobId: {}, incoming update Date: {}, saved update date: {}".format(
           blobid, update_date, job_date))
     if job_date is None or job_date <= update_date:
-        connection.object_put_json(key, json.dumps(payload))
+        connection.object_put_json(key, payload)
         return
     if sourcetable == "af3_runs_details":
         raise OutOfDateAnnotationException("OutOfDateAnnotationException: \
@@ -223,7 +223,8 @@ def read_from_storage(blobid, connection, blob_prefix):
         blobid, update_date, job_date))
 
     if job_date is None or job_date <= update_date:
-        return connection.object_get_json(get_default_keyname(blobid, prefix=blob_prefix))
+        note = connection.object_get_json(get_default_keyname(blobid, prefix=blob_prefix))
+        return json.loads(note)
 
 
 def get_last_run_id(run_table_name, run_id_name):
