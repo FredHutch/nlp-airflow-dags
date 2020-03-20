@@ -167,8 +167,8 @@ def save_note_to_temp_storage(blobid, hdcpupdatedate, metadata_dict):
                    "SERVICE_DT_TM, INSTITUTION, EVENT_CD_DESCR) "
                    "VALUES (%s, %s, %s, %s, %s, %s, %s, %s)")
     print("saving metadata to temp storage for {}, {}".format(blobid, hdcpupdatedate))
-
-    common_hooks.ANNOTATIONS_DB.run(insert_stmt, parameters=(blobid,
+    try:
+      common_hooks.ANNOTATIONS_DB.run(insert_stmt, parameters=(blobid,
                                                        hdcpupdatedate,
                                                        metadata_dict["clinical_event_id"],
                                                        metadata_dict["patient_id"],
@@ -176,6 +176,16 @@ def save_note_to_temp_storage(blobid, hdcpupdatedate, metadata_dict):
                                                        metadata_dict["servicedt"],
                                                        metadata_dict["instit"],
                                                        metadata_dict["cd_descr"]), autocommit=True)
+    except OperationalError as e:
+      message = ("A OperationalError occurred while trying to store temp note to source for"
+                           " for blobid: {blobid}".format(blobid=blobid))
+      print(message)
+      common_functions.log_error_and_failure_for_deid_note_job(run_id,
+                                                              blobid,
+                                                              hdcpupdatedate,
+                                                              message,
+                                                              "TEMP NOTE STORAGE")
+      continue
 
 
 def save_person_info_to_temp_storage(blobid, hdcpupdatedate, patient_data):
@@ -183,12 +193,23 @@ def save_person_info_to_temp_storage(blobid, hdcpupdatedate, patient_data):
                   "(HDCOrcaBlobId, HDCPUpdateDate, HDCPersonId, FirstName, MiddleName, LastName) "
                   "VALUES (%s, %s, %s, %s, %s, %s)")
     print("saving person info to temp storage for {}, {}: {}".format(blobid, hdcpupdatedate, patient_data[0]))
-    common_hooks.ANNOTATIONS_DB.run(insert_stmt, parameters=(blobid,
+    try:
+      common_hooks.ANNOTATIONS_DB.run(insert_stmt, parameters=(blobid,
                                                        hdcpupdatedate,
                                                        patient_data[0],
                                                        patient_data[1],
                                                        patient_data[2],
                                                        patient_data[3]), autocommit=True)
+    except OperationalError as e:
+      message = ("A OperationalError occurred while trying to store person data to source for"
+                           " for blobid: {blobid}".format(blobid=blobid))
+      print(message)
+      common_functions.log_error_and_failure_for_deid_note_job(run_id,
+                                                              blobid,
+                                                              hdcpupdatedate,
+                                                              message,
+                                                              "TEMP PERSON STORAGE")
+      continue
 
 
 def annotate_clinical_notes(**kwargs):
@@ -210,10 +231,22 @@ def annotate_clinical_notes(**kwargs):
 
     batch_records = {}
 
-    note_metadata = common_functions.get_note_and_metadata_dict_from_source(blobid, hdcpupdatedate)
-    patient_data = common_functions.get_patient_data_from_source(note_metadata["patient_id"])
+    try:
+      note_metadata = common_functions.get_note_and_metadata_dict_from_source(blobid, hdcpupdatedate)
+      patient_data = common_functions.get_patient_data_from_source(note_metadata["patient_id"])
 
-    if note_metadata["patient_id"] is None or patient_data is None:
+    except OperationalError as e:
+      message = ("A OperationalError occurred while trying to get person and note data from source for"
+                           " for blobid: {blobid}".format(blobid=blobid))
+      print(message)
+      common_functions.log_error_and_failure_for_deid_note_job(run_id,
+                                                              blobid,
+                                                              hdcpupdatedate,
+                                                              message,
+                                                              "NOTE AND PERSON RETRIEVAL")
+      continue
+
+    if note_metadata is None or note_metadata["patient_id"] is None or patient_data is None:
         message = "Exception occurred: No PatientID found for BlobId, HDCPUpdateDate: {id},{date}".format(
             id=blobid, date=hdcpupdatedate)
         common_hooks.log_error_and_failure_for_deid_note_job(run_id,
