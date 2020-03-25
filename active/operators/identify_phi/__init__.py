@@ -1,2 +1,3 @@
-from .dequeue import dequeue_blobid_from_process_queue
+from .dequeue import dequeue_blobid_from_process_queue, dequeue_batch_blobid_from_process_queue
+from .requeue import requeue_blobid_to_process_queue
 from .send_notes_to_brat import send_notes_to_brat
