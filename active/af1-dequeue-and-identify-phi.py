@@ -9,6 +9,7 @@ from airflow.models import DAG
 from pymssql import OperationalError
 
 from operators.identify_phi import dequeue_batch_blobid_from_process_queue, send_notes_to_brat
+from operators.identify_phi import requeue_blobid_to_process_queue
 import utilities.common_variables as common_variables
 import utilities.common_hooks as common_hooks
 import utilities.common_functions as common_functions
