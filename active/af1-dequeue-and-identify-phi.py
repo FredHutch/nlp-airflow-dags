@@ -234,7 +234,8 @@ def annotate_clinical_notes(**kwargs):
                           "SET job_end = %s, job_status = %s " \
                           "WHERE {run_id} = %s".format(table=common_variables.AF1_RUNS,
                                                        run_id=common_variables.AF1_RUNS_ID)
-        common_hooks.AIRFLOW_NLP_DB.run(tgt_update_stmt, parameters=(datetime.now(), common_variables.JOB_COMPLETE, run_id))
+        common_hooks.AIRFLOW_NLP_DB.run(tgt_update_stmt, parameters=(datetime.now().strftime(common_variables.DT_FORMAT)[:-3],
+                                         common_variables.JOB_COMPLETE, run_id))
 
 
 def save_deid_annotations(annotation_records):
