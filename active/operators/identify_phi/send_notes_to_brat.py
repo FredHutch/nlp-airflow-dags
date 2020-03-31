@@ -18,7 +18,7 @@ def send_notes_to_brat(**kwargs):
     assignee = kwargs['assignee']
     hdcpupdatedate = kwargs['hdcpupdatedate']
     remote_nlp_data_path = "{}/{}".format(common_hooks.BRAT_NLP_FILEPATH, 
-                            "{assignee}/{date}".format(assignee, hdcpupdatedate))
+                            "{}/{}".format(assignee, hdcpupdatedate))
 
     record_processed = 0
     for hdcorcablobid, notes in clinical_notes.items():
