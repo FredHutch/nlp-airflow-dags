@@ -8,8 +8,10 @@ from airflow.operators.python_operator import PythonOperator
 from airflow.models import DAG
 from pymssql import OperationalError
 
-from operators.identify_phi import dequeue_batch_blobid_from_process_queue, send_notes_to_brat
-from operators.identify_phi import requeue_blobid_to_process_queue
+from operators.identify_phi import dequeue_batch_blobid_from_process_queue,\
+                                   send_notes_to_brat, \
+                                   requeue_blobid_to_process_queue
+
 import utilities.common_variables as common_variables
 import utilities.common_hooks as common_hooks
 import utilities.common_functions as common_functions
@@ -223,7 +225,8 @@ def annotate_clinical_notes(**kwargs):
 
             for assignee, to_review_by_assignee in assignment.items():
                 send_notes_to_brat(clinical_notes=to_review_by_assignee,
-                                   datafolder='{assignee}/{date}'.format(assignee=assignee, date=hdcpupdatedate.strftime('%Y-%m-%d')))
+                                   datafolder='{assignee}'.format(assignee=assignee),
+                                   hdcpupdatedate=hdcpupdatedate.strftime('%Y-%m-%d'))
                 save_deid_annotations(to_review_by_assignee)
 
         else:
