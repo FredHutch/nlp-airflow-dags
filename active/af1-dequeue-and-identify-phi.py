@@ -230,12 +230,12 @@ def annotate_clinical_notes(**kwargs):
         else:
             save_unreviewed_annotations(batch_records[blobid])
 
-        tgt_update_stmt = "UPDATE {table} " \
-                          "SET job_end = %s, job_status = %s " \
-                          "WHERE {run_id} = %s".format(table=common_variables.AF1_RUNS,
-                                                       run_id=common_variables.AF1_RUNS_ID)
-        common_hooks.AIRFLOW_NLP_DB.run(tgt_update_stmt, parameters=(datetime.now().strftime(common_variables.DT_FORMAT)[:-3],
-                                         common_variables.JOB_COMPLETE, run_id))
+    tgt_update_complete_stmt = ("UPDATE {table} " 
+                                "SET job_end = %s, job_status = %s " 
+                                "WHERE {run_id} = %s".format(table=common_variables.AF1_RUNS,
+                                                   run_id=common_variables.AF1_RUNS_ID))
+    common_hooks.AIRFLOW_NLP_DB.run(tgt_update_complete_stmt, parameters=(datetime.now().strftime(common_variables.DT_FORMAT)[:-3],
+                                     common_variables.JOB_COMPLETE, run_id))
 
 
 def save_deid_annotations(annotation_records):
