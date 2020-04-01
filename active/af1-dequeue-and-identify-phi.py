@@ -223,8 +223,7 @@ def annotate_clinical_notes(**kwargs):
 
             for assignee, to_review_by_assignee in assignment.items():
                 send_notes_to_brat(clinical_notes=to_review_by_assignee,
-                                   assignee=assignee, 
-                                   hdcpupdatedate= hdcpupdatedate.strftime('%Y-%m-%d'))
+                                   datafolder='{assignee}/{date}'.format(assignee=assignee, date=hdcpupdatedate.strftime('%Y-%m-%d')))
                 save_deid_annotations(to_review_by_assignee)
 
         else:
