@@ -10,7 +10,11 @@ from pymssql import OperationalError
 
 from operators.identify_phi import dequeue_batch_blobid_from_process_queue,\
                                    send_notes_to_brat, \
-                                   requeue_blobid_to_process_queue
+                                   requeue_blobid_to_process_queue, \
+                                   save_deid_annotations, \
+                                   save_unreviewed_annotations, \
+                                   save_note_to_temp_storage, \
+                                   save_person_info_to_temp_storage
 
 import utilities.common_variables as common_variables
 import utilities.common_hooks as common_hooks
@@ -22,6 +26,7 @@ args = {
     'start_date': datetime(2019,1,1),
     'retries': 1,
     'retry_delay': timedelta(minutes=5),
+    #'schedule_interval':'* */1 * * *'
 }
 
 dag = DAG(dag_id='af1-dequeue-and-identify-phi',
@@ -87,38 +92,6 @@ def populate_blobid_in_job_table(**kwargs):
 
 
 
-def save_note_to_temp_storage(blobid, hdcpupdatedate, metadata_dict):
-
-    insert_stmt = ("INSERT INTO TEMP_NOTES (HDCOrcaBlobID, HDCPUpdateDate,"
-                   "CLINICAL_EVENT_ID, HDCPersonId, BLOB_CONTENTS,"
-                   "SERVICE_DT_TM, INSTITUTION, EVENT_CD_DESCR) "
-                   "VALUES (%s, %s, %s, %s, %s, %s, %s, %s)")
-    print("saving metadata to temp storage for {}, {}".format(blobid, hdcpupdatedate))
-
-    common_hooks.ANNOTATIONS_DB.run(insert_stmt, parameters=(blobid,
-                                                   hdcpupdatedate,
-                                                   metadata_dict["clinical_event_id"],
-                                                   metadata_dict["patient_id"],
-                                                   metadata_dict["blob_contents"],
-                                                   metadata_dict["servicedt"],
-                                                   metadata_dict["instit"],
-                                                   metadata_dict["cd_descr"]), autocommit=True)
-
-
-
-
-def save_person_info_to_temp_storage(blobid, hdcpupdatedate, patient_data):
-    insert_stmt = ("INSERT INTO TEMP_PERSON "
-                  "(HDCOrcaBlobId, HDCPUpdateDate, HDCPersonId, FirstName, MiddleName, LastName) "
-                  "VALUES (%s, %s, %s, %s, %s, %s)")
-    print("saving person info to temp storage for {}, {}: {}".format(blobid, hdcpupdatedate, patient_data[0]))
-
-    common_hooks.ANNOTATIONS_DB.run(insert_stmt, parameters=(blobid,
-                                                   hdcpupdatedate,
-                                                   patient_data[0],
-                                                   patient_data[1],
-                                                   patient_data[2],
-                                                   patient_data[3]), autocommit=True)
 
 
 
@@ -182,7 +155,11 @@ def annotate_clinical_notes(**kwargs):
             batch_records[blobid] = record
 
         except Exception as e:
+            message = ("An Exception occurred while trying to store temp note to source for"
+                       " for blobid: {blobid} {error}".format(blobid=blobid, error=e))
+            print(message)
             common_functions.log_error_and_failure_for_deid_note_job(run_id, blobid, hdcpupdatedate, e, "Flask DeID API")
+            requeue_blobid_to_process_queue(blobid, hdcpupdatedate)
             continue
 
         common_hooks.AIRFLOW_NLP_DB.run(tgt_update_stmt,
@@ -195,7 +172,7 @@ def annotate_clinical_notes(**kwargs):
             save_note_to_temp_storage(blobid, hdcpupdatedate, note_metadata)
         except OperationalError as e:
             message = ("A OperationalError occurred while trying to store temp note to source for"
-                       " for blobid: {blobid}".format(blobid=blobid))
+                       " for blobid: {blobid} {error}".format(blobid=blobid, error=e))
             print(message)
             common_functions.log_error_and_failure_for_deid_note_job(run_id,
                                                                      blobid,
@@ -209,7 +186,7 @@ def annotate_clinical_notes(**kwargs):
             save_person_info_to_temp_storage(blobid, hdcpupdatedate, patient_data)
         except OperationalError as e:
             message = ("A OperationalError occurred while trying to store person data to source for"
-                       " for blobid: {blobid}".format(blobid=blobid))
+                       " for blobid: {blobid} {error}".format(blobid=blobid, error=e))
             print(message)
             common_functions.log_error_and_failure_for_deid_note_job(run_id,
                                                                      blobid,
@@ -238,16 +215,6 @@ def annotate_clinical_notes(**kwargs):
                                                    run_id=common_variables.AF1_RUNS_ID))
     common_hooks.AIRFLOW_NLP_DB.run(tgt_update_complete_stmt, parameters=(datetime.now().strftime(common_variables.DT_FORMAT)[:-3],
                                      common_variables.JOB_COMPLETE, run_id))
-
-
-def save_deid_annotations(annotation_records):
-    for blobid, record in annotation_records.items():
-        common_functions.save_deid_annotation(blobid, record['hdcpupdatedate'], str(record['annotated_note']))
-
-
-def save_unreviewed_annotations(annotation_records):
-    for blobid, record in annotation_records.items():
-        common_functions.save_unreviewed_annotation(blobid, record['hdcpupdatedate'], str(record['annotated_note']))
 
 
 def split_records_by_review_status(records):
