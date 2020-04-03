@@ -1,5 +1,5 @@
 import utilities.common_hooks as common_hooks
-
+from pymssql import OperationalError
 
 def requeue_blobid_to_process_queue(blobid, hdcpupdatedate, **kwargs):
   '''
@@ -9,7 +9,13 @@ def requeue_blobid_to_process_queue(blobid, hdcpupdatedate, **kwargs):
   :param kwargs:
   :return:
   '''
-  exec_stmt = ("EXEC dbo.sp_requeue_note_id 'dbo.clinical_notes_process_queue', %s, %s")
-  results = common_hooks.ANNOTATIONS_DB.run(exec_stmt, parameters=(blobid, hdcpupdatedate))
+  try:
+    exec_stmt = ("EXEC dbo.sp_requeue_note_id 'dbo.clinical_notes_process_queue', %s, %s")
+    results = common_hooks.ANNOTATIONS_DB.run(exec_stmt, parameters=(blobid, hdcpupdatedate))
+  except OperationalError as e:
+    message = ("A OperationalError occurred while trying to store person data to source for"
+               " for blobid, hdcpupdatedate: ({blobid}, {updatedate})\n"
+               "{error}".format(blobid=blobid, updatedate=hdcpupdatedate, error=e))
+    print(message)
 
   return
