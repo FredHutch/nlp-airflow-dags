@@ -1,3 +1,5 @@
+import utilities.common_hooks as common_hooks
+
 def save_note_to_temp_storage(blobid, hdcpupdatedate, metadata_dict):
 
     insert_stmt = ("INSERT INTO TEMP_NOTES (HDCOrcaBlobID, HDCPUpdateDate,"
