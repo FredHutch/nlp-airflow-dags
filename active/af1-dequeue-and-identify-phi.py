@@ -172,7 +172,7 @@ def annotate_clinical_notes(**kwargs):
             for assignee, to_review_by_assignee in assignment.items():
                 send_notes_to_brat(clinical_notes=to_review_by_assignee,
                                    datafolder='{assignee}'.format(assignee=assignee),
-                                   hdcpupdatedate=hdcpupdatedate[:10])
+                                   hdcpupdatedate=hdcpupdatedate.strftime('%Y-%m-%d'))
                 try:
                     save_deid_annotations(to_review_by_assignee)
                 except OperationalError as e:

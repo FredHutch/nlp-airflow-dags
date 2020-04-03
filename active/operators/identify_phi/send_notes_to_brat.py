@@ -32,6 +32,7 @@ def send_notes_to_brat(**kwargs):
                 subprocess.call(["ssh", "-o StrictHostKeyChecking=no", "-p {}".format(common_hooks.BRAT_SSH_HOOK.port),
                                  "{}@{}".format(common_hooks.BRAT_SSH_HOOK.username, common_hooks.BRAT_SSH_HOOK.remote_host), remote_command])
 
+        annotation_name = "_".join(map(str, [hdcorcablobid, hdcpupdatedate]))
         # send original notes to brat
         remote_command = """
                          umask 002;
@@ -44,7 +45,7 @@ def send_notes_to_brat(**kwargs):
                                                                                                        "").replace("'",
                                                                                                                    ""),
             remotePath=remote_nlp_data_path,
-            filename=hdcorcablobid
+            filename=annotation_name
         )
 
         subprocess.call(["ssh", "-o StrictHostKeyChecking=no", "-p {}".format(common_hooks.BRAT_SSH_HOOK.port),
@@ -58,7 +59,7 @@ def send_notes_to_brat(**kwargs):
                 line += 1
                 phi_anno_data.append(
                     "T{}\t{} {} {}\t{}".format(line, j['type'], j['start'], j['end'], j['text']))
-        annotation_name = "_".join(map(str, [hdcorcablobid, hdcpupdatedate]))
+
         full_file_name = "".join(map(str, [remote_nlp_data_path, "/", annotation_name, ".ann"]))
         if len(phi_anno_data) > 0:
             remote_command = """
@@ -68,11 +69,11 @@ def send_notes_to_brat(**kwargs):
                 data=str(base64.b64encode("\r\n".join(
                     phi_anno_data).encode('utf-8'))).replace("b'", "").replace("'", ""),
                 remotePath=remote_nlp_data_path,
-                filename=hdcorcablobid
+                filename=annotation_name
             )
         else:
             remote_command = "umask 002; touch {remotePath}/{filename}.ann;".format(remotePath=remote_nlp_data_path,
-                                                                                    filename=hdcorcablobid)
+                                                                                    filename=annotation_name)
         subprocess.call(["ssh", "-p {}".format(common_hooks.BRAT_SSH_HOOK.port), "{}@{}".format(common_hooks.BRAT_SSH_HOOK.username, common_hooks.BRAT_SSH_HOOK.remote_host),
                          remote_command])
 
