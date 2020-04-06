@@ -125,8 +125,8 @@ def populate_blobid_in_job_table(**kwargs):
             message = ("An OperationalError occured while trying to fetch potential annotations from the source data server"
                    " for select statement {}".format(src_select_stmt))
             print(message)
-            common_functions.log_error_and_failure_for_resynth_note_job(run_id, datetime.strptime('1900-01-01', "%Y-%m-%d"), 0, message,
-                                                                  "Get potential annotations")
+            common_functions.log_error_and_failure_for_resynth_note_job(run_id, 0, datetime.strptime('1900-01-01', "%Y-%m-%d"), message,
+                                                                  common_variables.JOB_FAILURE)
         
 
 def _get_resynth_run_details_id_by_creation_date(run_id, date):
