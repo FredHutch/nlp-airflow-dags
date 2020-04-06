@@ -165,30 +165,34 @@ def annotate_clinical_notes(**kwargs):
             _log_failure_and_reqeue(message, "TEMP PERSON STORAGE", run_id, blobid, hdcpupdatedate)
             continue
 
-        to_review, skip_review = split_records_by_review_status(batch_records)
-        if _review_criterion(batch_records[blobid]):
-            assignment = _divide_tasks(to_review, common_variables.BRAT_ASSIGNEE)
+    to_review, skip_review = split_records_by_review_status(batch_records)
 
-            for assignee, to_review_by_assignee in assignment.items():
-                send_notes_to_brat(clinical_notes=to_review_by_assignee,
-                                   datafolder='{assignee}'.format(assignee=assignee),
-                                   hdcpupdatedate=hdcpupdatedate.strftime('%Y-%m-%d'))
-                try:
-                    save_deid_annotations(to_review_by_assignee)
-                except OperationalError as e:
-                    message = ("A OperationalError occurred while trying to store deid annotations to source for"
-                               " for blobid: {blobid} {error}".format(blobid=blobid, error=e))
-                    _log_failure_and_reqeue(message, "DEID ANNOTATION STORAGE", run_id, blobid, hdcpupdatedate)
-                    continue
+    #Notes for Review
+    assignment = _divide_tasks(to_review, common_variables.BRAT_ASSIGNEE)
+    print('ASSIGNMENTS: {}'.format(assignment))
+    for assignee, to_review_by_assignee in assignment.items():
+        send_notes_to_brat(clinical_notes=to_review_by_assignee,
+                           datafolder='{assignee}'.format(assignee=assignee))
 
-        else:
+        for blobid, record in to_review_by_assignee.items():
             try:
-                save_unreviewed_annotations(batch_records[blobid])
+                common_functions.save_deid_annotation(blobid, record['hdcpupdatedate'], str(record['annotated_note']))
+
             except OperationalError as e:
-                message = ("A OperationalError occurred while trying to store unreviewed deid annotations to source for"
+                message = ("A OperationalError occurred while trying to store deid annotations to source for"
                            " for blobid: {blobid} {error}".format(blobid=blobid, error=e))
-                _log_failure_and_reqeue(message, "DEID ANNOTATION STORAGE", run_id, blobid, hdcpupdatedate)
+                _log_failure_and_reqeue(message, "DEID ANNOTATION STORAGE", run_id, blobid, record['hdcpupdatedate'])
                 continue
+
+    # Notes Without Review
+    for blobid, record in skip_review.items():
+        try:
+            common_functions.save_unreviewed_annotation(blobid, record['hdcpupdatedate'], str(record['annotated_note']))
+        except OperationalError as e:
+            message = ("A OperationalError occurred while trying to store unreviewed deid annotations to source for"
+                       " for blobid: {blobid} {error}".format(blobid=blobid, error=e))
+            _log_failure_and_reqeue(message, "DEID UNREVIEWED ANNOTATION STORAGE", run_id, blobid, record['hdcpupdatedate'])
+
 
     tgt_update_complete_stmt = ("UPDATE {table} " 
                                 "SET job_end = %s, job_status = %s " 

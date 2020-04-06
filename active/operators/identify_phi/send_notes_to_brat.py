@@ -16,12 +16,13 @@ import utilities.common_functions as common_functions
 def send_notes_to_brat(**kwargs):
     clinical_notes = kwargs['clinical_notes']
     datafolder = kwargs['datafolder']
-    hdcpupdatedate = kwargs['hdcpupdatedate']
+
     remote_nlp_data_path = "{}/{}".format(common_hooks.BRAT_NLP_FILEPATH, datafolder)
 
     record_processed = 0
     for hdcorcablobid, notes in clinical_notes.items():
         # create a subfolder for hdcpupdatedate
+        hdcpupdatedate = notes['hdcpupdatedate'].strftime('%Y-%m-%d')
         if record_processed == 0:
             remote_command = "[ -d {} ] && echo 'found'".format(remote_nlp_data_path)
             is_folder_found = subprocess.getoutput(
