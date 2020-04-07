@@ -9,8 +9,7 @@ from airflow.models import DAG
 from pymssql import OperationalError
 
 from operators.identify_phi import dequeue_batch_blobid_from_process_queue,\
-                                   find_or_create_remote_dir, \
-                                   send_singleton_note_to_brat, \
+                                   send_notes_to_brat, \
                                    requeue_blobid_to_process_queue, \
                                    save_deid_annotations, \
                                    save_unreviewed_annotations, \
@@ -134,8 +133,9 @@ def annotate_clinical_notes(**kwargs):
         try:
             resp = common_hooks.DEID_NLP_API_HOOK.run("/identifyphi", data=json.dumps(record['original_note']),
                                 headers={"Content-Type": "application/json"})
+            record['annotated_note'] = json.loads(resp.content)
             annotation_status = common_variables.JOB_COMPLETE
-
+            batch_records[blobid] = record
 
         except Exception as e:
             message = ("An Exception occurred while trying to store temp note to source for"
@@ -165,19 +165,14 @@ def annotate_clinical_notes(**kwargs):
             _log_failure_and_reqeue(message, "TEMP PERSON STORAGE", run_id, blobid, hdcpupdatedate)
             continue
 
-        #do this AFTER all kickouts from saving to annotations DB so that bad DB access doesn't result in stranded notes
-        record['annotated_note'] = json.loads(resp.content)
-        batch_records[blobid] = record
-
     to_review, skip_review = split_records_by_review_status(batch_records)
 
     #Notes for Review
     assignment = _divide_tasks(to_review, common_variables.BRAT_ASSIGNEE)
     print('ASSIGNMENTS: {}'.format(assignment))
     for assignee, to_review_by_assignee in assignment.items():
-
-        remote_nlp_data_path = "{}/{}".format(common_hooks.BRAT_NLP_FILEPATH, assignee)
-        find_or_create_remote_dir(remote_nlp_data_path)
+        send_notes_to_brat(clinical_notes=to_review_by_assignee,
+                           datafolder='{assignee}'.format(assignee=assignee))
 
         for blobid, record in to_review_by_assignee.items():
             try:
@@ -188,8 +183,6 @@ def annotate_clinical_notes(**kwargs):
                            " for blobid: {blobid} {error}".format(blobid=blobid, error=e))
                 _log_failure_and_reqeue(message, "DEID ANNOTATION STORAGE", run_id, blobid, record['hdcpupdatedate'])
                 continue
-
-            send_singleton_note_to_brat(remote_nlp_data_path, blobid, record)
 
     # Notes Without Review
     for blobid, record in skip_review.items():
