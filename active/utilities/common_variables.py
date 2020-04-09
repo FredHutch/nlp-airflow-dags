@@ -42,6 +42,11 @@ NLP_NER_PENDING = "NER Pending"
 NLP_NER_COMPLETE = "NER Complete"
 NLP_NER_FAILED = "NER Failed"
 
+# NLP bort related
+NLP_BORT_PENDING = "BORT Pending"
+NLP_BORT_COMPLETE = "BORT Complete"
+NLP_BORT_FAILED = "BORT Failed"
+
 
 ################
 #Trashman Vars #
@@ -79,6 +84,10 @@ AF4_SOURCE_BRAT_ID = "af2_runs_id"
 AF5_RUNS = 'af5_runs'
 AF5_RUNS_DETAILS = 'af5_runs_details'
 AF5_RUNS_ID = "af5_runs_id"
+# af6 table: bort
+AF6_RUNS = 'af6_runs'
+AF6_RUNS_DETAILS = 'af6_runs_details'
+AF6_RUNS_ID = 'af6_runs_id'
 # source table
 ANNOTATION_TABLE = 'annotations'
 TEMP_PERSON = 'TEMP_PERSON'
