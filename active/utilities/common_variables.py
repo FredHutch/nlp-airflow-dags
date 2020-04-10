@@ -15,6 +15,7 @@ os.environ['OS_USERNAME'] = Variable.get('OS_USERNAME')
 # threshold for af4
 COMPLETE_STALE_THRESHOLD = timedelta(days=int(Variable.get("COMPLETE_STALE_THRESHOLD", 7)))
 REVIEW_STALE_THRESHOLD = timedelta(days=int(Variable.get("REVIEW_STALE_THRESHOLD", 20)))
+RESYNTH_REDRIVE_THRESHOLD = timedelta(days=int(Variable.get("RESYNTH_REDRIVE_THRESHOLD", 1)))
 #the default 'beginning time' for any date-based choosing strategies
 DT_FORMAT = "%Y-%m-%d %H:%M:%S.%f"
 EPOCH = Variable.get("EPOCH", datetime(1970, 1, 1).strftime(DT_FORMAT)[:-3])

@@ -4,6 +4,6 @@ from .check_brat_staleness import check_brat_staleness
 from .check_resynth_tasks import check_resynth_tasks
 from .generate_email_operator import generate_email_operator
 from .mark_job_complete import mark_job_complete
-from .redrive_jobs import redrive_jobs
+from .redrive_jobs import redrive_resynth_jobs
 from .remove_complete_brat_jobs import remove_complete_brat_jobs
 from .report_stale_brat_jobs import report_stale_brat_jobs

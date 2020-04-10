@@ -16,14 +16,14 @@ def redrive_jobs(**kwargs):
     return
 
 
-def _redrive_brat_stale_task(task):
+def redrive_brat_stale_task(task):
 
     return
 
 
-def _redrive_resynth_task(task):
+def redrive_resynth_jobs(**kwargs):
     return True
 
 
-def _redrive_deid_task(task):
+def redrive_deid_task(task):
     return True

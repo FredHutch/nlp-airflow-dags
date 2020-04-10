@@ -68,6 +68,26 @@ remove_complete_brat_jobs = PythonOperator(task_id='remove_complete_brat_jobs',
                               trigger_rule=TriggerRule.ALL_SUCCESS,
                               dag=dag)
 
+
+check_resynth_tasks = PythonOperator(task_id='check_resynth_tasks',
+                                      provide_context=True,
+                                      python_callable=trashman.check_resynth_tasks,
+                                      op_args={'generate_job_id'},
+                                      dag=dag)
+
+redrive_resynth_jobs = PythonOperator(task_id='redrive_resynth_jobs',
+                                      provide_context=True,
+                                      python_callable=trashman.redrive_resynth_jobs,
+                                      op_args={'check_resynth_tasks'},
+                                      dag=dag)
+
+#Brat Checks
 generate_job_id >> check_brat_staleness >> report_stale_brat_jobs >> send_stale_brat_email
 generate_job_id >> check_brat_completeness >> remove_complete_brat_jobs
-[report_stale_brat_jobs, remove_complete_brat_jobs] >> mark_job_complete
+
+
+#Resynthesis Checks
+generate_job_id >> check_resynth_tasks >> redrive_resynth_jobs
+
+
+[report_stale_brat_jobs, remove_complete_brat_jobs, redrive_resynth_jobs] >> mark_job_complete
