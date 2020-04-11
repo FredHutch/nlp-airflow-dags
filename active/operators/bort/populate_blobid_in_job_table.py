@@ -3,7 +3,6 @@ from datetime import datetime
 import utilities.common_hooks as common_hooks
 import utilities.common_variables as common_variables
 
-<<<<<<< HEAD
 def populate_blobid_in_job_table(**kwargs):
     # get last update date
     #bortdates instead of resynth dates?
@@ -26,7 +25,4 @@ def populate_blobid_in_job_table(**kwargs):
                                                                 run_id=common_variables.AF6_RUNS_ID)
 
     jobs_list = []
-
     return jobs_list
-=======
->>>>>>> b971b26922305b16fba3df263b1a220425ce9d97

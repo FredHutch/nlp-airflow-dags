@@ -16,7 +16,7 @@ def run_bort_task(**kwargs):
         # record number of NER tasks
         record_processed = 0
         #TODO: Code to run to bort from storage and to relation extraction stuff
-
+    return
 
 def _update_bort_run_details(run_id, blobid, hdcpupdatedate, state):
     tgt_update_stmt = "UPDATE {table} " \

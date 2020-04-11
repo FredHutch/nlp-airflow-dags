@@ -27,31 +27,19 @@ generate_job_id = \
 
 
 
-populate_blobid_in_job_table_operator = \
+populate_blobid_in_job_table = \
     PythonOperator(task_id='populate_blobid_in_job_table',
                    provide_context=True,
                    python_callable=populate_blobid_in_job_table,
                    dag=dag)
 
-<<<<<<< HEAD
-run_ner_tasks= \
-    PythonOperator(task_id='run_ner_borts_tasks',
+run_bort_tasks= \
+    PythonOperator(task_id='run_bort_tasks',
                    provide_context=True,
                    python_callable=run_bort_tasks,
                    dag=dag)
 
 
-generate_job_id >> populate_blobid_in_job_table_operator >> run_bort_tasks
-=======
-run_ner_tasks_and_save_to_source = \
-    PythonOperator(task_id='run_ner_borts_task_and_saveto_source',
-                   provide_context=True,
-                   python_callable=run_ner_task,
-                   dag=dag)
-
-
-generate_job_id >> populate_blobid_in_job_table_operator >> run_bort_tasks_and_save_to_source
-
->>>>>>> b971b26922305b16fba3df263b1a220425ce9d97
+generate_job_id >> populate_blobid_in_job_table >> run_bort_tasks
 
 

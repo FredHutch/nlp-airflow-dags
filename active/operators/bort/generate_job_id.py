@@ -4,7 +4,6 @@ import utilities.common_variables as common_variables
 import utilities.common_hooks as common_hooks
 from airflow.operators.python_operator import PythonOperator
 
-<<<<<<< HEAD
 def generate_job_id(**kwargs):
     """
     return job id since last task (BORT) run
@@ -70,5 +69,4 @@ def generate_job_id_operator(dag, default_args):
                        )
 
     return generate_job_id_operator
-=======
->>>>>>> b971b26922305b16fba3df263b1a220425ce9d97
+
