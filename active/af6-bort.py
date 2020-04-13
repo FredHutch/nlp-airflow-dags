@@ -2,7 +2,7 @@ from datetime import datetime, timedelta
 
 from airflow.operators.python_operator import PythonOperator
 from airflow.models import DAG
-from operators.bort import generate_job_id, populate_blobid_in_job_table, run_bort_task
+from operators.bort import generate_job_id, populate_blobid_in_job_table, run_bort_tasks
 
 DAG_NAME = 'af6-bort'
 CHILD_DAG_NAME = 'populate_blobid_in_job_table'
