@@ -5,6 +5,8 @@ from airflow.operators.python_operator import PythonOperator
 from airflow.models import DAG
 from pymssql import OperationalError
 
+from operators.resynthesis import get_resynth_ready_annotations_since_date
+
 import utilities.common_variables as common_variables
 import utilities.common_hooks as common_hooks
 import utilities.common_functions as common_functions
@@ -31,21 +33,6 @@ def _insert_resynth_run_job(run_id, update_date, record_count, job_start_date):
                               parameters=(run_id, update_date, record_count, job_start_date, common_variables.JOB_RUNNING))
 
     return
-
-
-def _get_annotations_since_date(update_date_from_last_run):
-    # get last update date from source since last successful run
-    # then pull record id with new update date from source
-    src_select_stmt = ("SELECT date_created, count(*) "
-                      "FROM {table} "
-                      "WHERE date_created >= %s "
-                      "AND (category = %s OR category = %s) "
-                      "GROUP BY date_created ".format(table=common_variables.ANNOTATION_TABLE))
-
-    return common_hooks.ANNOTATIONS_DB.get_records(src_select_stmt,
-                                             parameters=(update_date_from_last_run,
-                                                         common_variables.BRAT_REVIEWED_ANNOTATION_TYPE,
-                                                         common_variables.REVIEW_BYPASSED_ANNOTATION_TYPE))
 
 
 def _get_last_resynth_run_id():
@@ -80,9 +67,9 @@ def generate_job_id(**kwargs):
     # then pull record id with new update date from source
     job_start_date = datetime.now().strftime(common_variables.DT_FORMAT)[:-3]
     datecreated = []
-    for row in _get_annotations_since_date(update_date_from_last_run):
-        datecreated.append(row[0])
-        _insert_resynth_run_job(new_run_id, row[0], row[1], job_start_date)
+    for row in get_resynth_ready_annotations_since_date(update_date_from_last_run):
+        datecreated.append(row['date_created'])
+        _insert_resynth_run_job(new_run_id, row['date_created'], row['count'], job_start_date)
 
     if len(datecreated) == 0:
         print("No new records found since last update date: {}".format(update_date_from_last_run))
