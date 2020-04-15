@@ -12,7 +12,7 @@ Need to account for this somehow
 '''
 REDRIVEABLE_CLAUSE = ("(resynth_status = {scheduled_var} AND DATE_PART('DAY', NOW() - annotation_creation_date) >= {delta}) "
                      " OR resynth_status = {failure_var} ".format(scheduled_var=common_variables.JOB_RUNNING,
-                                   delta=common_variables.common_variables,
+                                   delta=common_variables.RESYNTH_REDRIVE_THRESHOLD,
                                    failure_var=common_variables.JOB_FAILURE))
 
 SQL_FETCH_AF3_REDRIVABLE_JOBS = ("SELECT hdcorcablobid"
