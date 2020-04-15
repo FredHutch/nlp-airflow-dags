@@ -7,7 +7,7 @@ import utilities.common_functions as common_functions
 #TODO: add prospective BERT endpoint in utilities?
 
 
-def run_bort_task(**kwargs):
+def run_bort_tasks(**kwargs):
     # get last update date
     (jobs_list) = kwargs['ti'].xcom_pull(task_ids='populate_blobid_in_job_table')
     print("job tuple: {}".format(jobs_list))
