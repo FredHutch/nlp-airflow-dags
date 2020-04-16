@@ -97,10 +97,10 @@ def populate_blobid_in_job_table(**kwargs):
     tgt_insert_stmt = ("INSERT INTO {table} "
                       "(af3_runs_id, hdcpupdatedate, hdcorcablobid, annotation_creation_date, resynth_status) "
                       "VALUES (%s, %s, %s, %s, %s) ".format(table=common_variables.AF3_RUNS_DETAILS))
-
+    annotations_db = common_hooks.get_annotations_db_hook()
     for creation_date in datecreated:
         try:
-            for row in common_hooks.ANNOTATIONS_DB.get_records(src_select_stmt, parameters=(creation_date,)):
+            for row in annotations_db.get_records(src_select_stmt, parameters=(creation_date,)):
                 if (row[0], row[1]) in complete_jobs:
                     print("Job for note {},{}  originally created on {} has already been completed on {} ."
                             " Skipping.".format(row[0], row[1], creation_date, complete_jobs[(row[0], row[1])]))
@@ -154,8 +154,9 @@ def _get_annotations_by_id_and_created_date(blobid, date):
                       "WHERE date_created = %s and hdcorcablobid = %s "
                       "AND (category = %s "
                       "     OR category = %s)".format(table=common_variables.ANNOTATION_TABLE))
+    annotations_db = common_hooks.get_annotations_db_hook()
     try:
-      return common_hooks.ANNOTATIONS_DB.get_records(src_select_stmt, parameters=(
+      return annotations_db.get_records(src_select_stmt, parameters=(
                                              date, blobid, common_variables.REVIEW_BYPASSED_ANNOTATION_TYPE,
                                              common_variables.BRAT_REVIEWED_ANNOTATION_TYPE))
     except OperationalError as e:
@@ -226,8 +227,9 @@ def _get_patient_data_from_temp(blobid, hdcpupdatedate, patientid):
     pt_select_stmt = ("SELECT HDCOrcaBlobId, HDCPUpdateDate, HDCPersonId, FirstName, MiddleName, LastName"
                       " FROM {table}"
                       " WHERE HDCOrcaBlobId = %s AND HDCPUpdateDate = %s AND HDCPersonId = %s".format(table=common_variables.TEMP_PERSON))
+    annotations_db = common_hooks.get_annotations_db_hook()
     try:
-      ret = (common_hooks.ANNOTATIONS_DB.get_first(pt_select_stmt, parameters=(blobid, hdcpupdatedate, patientid))
+      ret = (annotations_db.get_first(pt_select_stmt, parameters=(blobid, hdcpupdatedate, patientid))
             or (None, None, None, None, None, None))
     except OperationalError as e:
         message = ("An OperationalError occured while trying to fetch patient alias data for patientid {}".format(patientid))
@@ -247,7 +249,8 @@ def _get_alias_data(patientid):
     al_select_stmt = ("SELECT FakeId, DateshiftDays, FirstName, MiddleName, LastName"
                       " FROM {table}"
                       " WHERE HDCPersonID = %s".format(table=common_variables.PatientMap))
-    return (common_hooks.SOURCE_NOTE_DB.get_first(al_select_stmt, parameters=(patientid,))
+    source_note_db = common_hooks.get_source_notes_db_hook()
+    return (source_note_db.get_first(al_select_stmt, parameters=(patientid,))
             or (None, None, None, None, None))
 
 

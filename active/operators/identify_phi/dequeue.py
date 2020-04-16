@@ -17,7 +17,8 @@ def dequeue_batch_blobid_from_process_queue(batch_size, **kwargs):
   :return: a list of tuples: (blobid, hdcpupdatedate)
   '''
   exec_stmt = ("EXEC dbo.sp_dequeue_note_id 'dbo.clinical_notes_process_queue', {batch_size}".format(batch_size=batch_size))
-  results = (common_hooks.ANNOTATIONS_DB.get_records(exec_stmt) or (None, None))
+  annotations_db = common_hooks.get_annotations_db_hook()
+  results = (annotations_db.get_records(exec_stmt) or (None, None))
   print("Dequeued results: {}".format(results))
 
   records = []

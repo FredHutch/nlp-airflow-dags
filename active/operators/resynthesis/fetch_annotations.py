@@ -23,7 +23,8 @@ def get_resynth_ready_annotations_since_date(update_date_from_last_run):
                       "GROUP BY date_created ".format(table=common_variables.ANNOTATION_TABLE))
 
     annotations_list = []
-    for row in common_hooks.ANNOTATIONS_DB.get_records(src_select_stmt,
+    annotations_db = common_hooks.get_annotations_db_hook()
+    for row in annotations_db.get_records(src_select_stmt,
                                              parameters=(update_date_from_last_run,
                                                          common_variables.BRAT_REVIEWED_ANNOTATION_TYPE,
                                                          common_variables.REVIEW_BYPASSED_ANNOTATION_TYPE)):

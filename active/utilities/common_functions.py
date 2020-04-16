@@ -3,7 +3,7 @@ import os
 from contextlib import closing
 from datetime import datetime, timedelta
 
-from utilities.common_hooks import AIRFLOW_NLP_DB, ERROR_DB, ANNOTATIONS_DB, SOURCE_NOTE_DB
+from utilities.common_hooks import AIRFLOW_NLP_DB, ERROR_DB, get_annotations_db_hook, get_source_notes_db_hook
 import utilities.common_variables as common_variables
 
 
@@ -57,8 +57,8 @@ def save_json_annotation(hdcorcablobid, hdcpupdatedate, json_annotation, annotat
     job_start_date = datetime.now().strftime(common_variables.DT_FORMAT)[:-3]
     print("new annotation added: BlobId {}, HDCPUpdateDate {}: annotation_type {}, job_start_date {}".format(
         hdcorcablobid, hdcpupdatedate, annotation_type, job_start_date))
-
-    ANNOTATIONS_DB.run(tgt_insert_stmt,
+    annotations_db = get_annotations_db_hook()
+    annotations_db.run(tgt_insert_stmt,
                        parameters=(
                        hdcorcablobid, hdcpupdatedate, annotation_type, job_start_date, job_start_date, json_annotation),
                        autocommit=True)
@@ -95,7 +95,8 @@ def get_original_note_by_blobid(blobid):
     src_select_stmt = "SELECT BLOB_CONTENTS " \
                       "FROM vClinicalNoteDiscovery " \
                       "WHERE HDCOrcaBlobID = %s"
-    results = SOURCE_NOTE_DB.get_first(src_select_stmt, parameters=(blobid,))
+    source_note_db = get_source_notes_db_hook()
+    results = source_note_db.get_first(src_select_stmt, parameters=(blobid,))
 
     #return blob_contents [0] from returned row
     return results[0]
@@ -108,7 +109,8 @@ def get_note_from_temp(blobid, hdcpupdatedate):
                        "BLOB_CONTENTS, SERVICE_DT_TM, INSTITUTION, EVENT_CD_DESCR " 
                        "FROM TEMP_NOTES " 
                        "WHERE  HDCOrcaBlobID = %s AND HDCPUpdateDate = %s")
-    result = (ANNOTATIONS_DB.get_first(src_select_stmt, parameters=(blobid, hdcpupdatedate))
+    annotations_db = get_annotations_db_hook()
+    result = (annotations_db.get_first(src_select_stmt, parameters=(blobid, hdcpupdatedate))
                or (None, None, None, None, None, None, None, None))
 
     result_dict = {"clinical_event_id": result[0],
@@ -129,7 +131,8 @@ def get_note_metadata_from_source(blobId):
                         "INSTITUTION, EVENT_CD_DESCR, HDCPersonID"
                         " FROM vClinicalNoteDiscovery"
                         " WHERE HDCOrcaBlobID = %s")
-    return (SOURCE_NOTE_DB.get_first(note_select_stmt, parameters=(blobId,))
+    source_note_db = get_source_notes_db_hook()
+    return (source_note_db.get_first(note_select_stmt, parameters=(blobId,))
         or (None, None, None, None, None))
 
 
@@ -140,8 +143,8 @@ def get_note_and_metadata_dict_from_source(blobId, hdcpupdatedate):
                         "INSTITUTION, EVENT_CD_DESCR, HDCPersonID"
                         " FROM vClinicalNoteDiscovery"
                         " WHERE HDCOrcaBlobID = %s AND HDCPUpdateDate = %s")
-
-    result = (SOURCE_NOTE_DB.get_first(note_select_stmt, parameters=(blobId, hdcpupdatedate)))
+    source_note_db = get_source_notes_db_hook()
+    result = (source_note_db.get_first(note_select_stmt, parameters=(blobId, hdcpupdatedate)))
 
     result_dict = {"clinical_event_id": result[0],
                    "blob_contents": result[1],
@@ -157,7 +160,8 @@ def get_patient_data_from_source(patientId):
     pt_select_stmt = ("SELECT HDCPersonID, GivenName, MiddleName, FamilyName"
                       " FROM Common_Person"
                       " WHERE HDCPersonID = %s")
-    return (SOURCE_NOTE_DB.get_first(pt_select_stmt, parameters=(patientId,))
+    source_note_db = get_source_notes_db_hook()
+    return (source_note_db.get_first(pt_select_stmt, parameters=(patientId,))
             or (None, None, None, None))
 
 

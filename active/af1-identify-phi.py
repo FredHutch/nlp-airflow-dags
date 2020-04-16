@@ -66,8 +66,8 @@ def generate_job_id(**kwargs):
     temp_date = common_variables.TEMP_DATE
     if update_date_from_last_run >= temp_date:
         update_date_from_last_run = temp_date
-
-    for row in common_hooks.SOURCE_NOTE_DB.get_records(src_select_stmt, parameters=(update_date_from_last_run,)):
+    source_note_db = common_hooks.get_source_notes_db_hook()
+    for row in source_note_db.get_records(src_select_stmt, parameters=(update_date_from_last_run,)):
         hdcpupdatedates.append(row[0])
         common_hooks.AIRFLOW_NLP_DB.run(tgt_insert_stmt, parameters=(new_run_id, row[0], row[1], job_start_date, common_variables.JOB_RUNNING))
         print("Job Batch for hdcpupdatedate: {}  contains {} notes."
@@ -104,8 +104,9 @@ def populate_blobid_in_job_table(**kwargs):
                                                        run_id=common_variables.AF1_RUNS_ID))
 
     total_job_count = common_variables.MAX_BATCH_SIZE
+    source_note_db = common_hooks.get_source_notes_db_hook()
     for hdcpupdatedate in hdcpupdatedates:
-        for row in common_hooks.SOURCE_NOTE_DB.get_records(src_select_stmt, parameters=(hdcpupdatedate,)):
+        for row in source_note_db.get_records(src_select_stmt, parameters=(hdcpupdatedate,)):
             print("checking ID: {} for previous completion.".format(row[0]))
             if (row[0], hdcpupdatedate) in complete_jobs.keys():
                 print("Job for note {},{} has already been completed on {} . "
@@ -131,8 +132,8 @@ def save_note_to_temp_storage(blobid, hdcpupdatedate, metadata_dict):
                    "SERVICE_DT_TM, INSTITUTION, EVENT_CD_DESCR) "
                    "VALUES (%s, %s, %s, %s, %s, %s, %s, %s)")
     print("saving metadata to temp storage for {}, {}".format(blobid, hdcpupdatedate))
-
-    common_hooks.ANNOTATIONS_DB.run(insert_stmt, parameters=(blobid,
+    annotations_db = common_hooks.get_annotations_db_hook()
+    annotations_db.run(insert_stmt, parameters=(blobid,
                                                        hdcpupdatedate,
                                                        metadata_dict["clinical_event_id"],
                                                        metadata_dict["patient_id"],
@@ -147,7 +148,8 @@ def save_person_info_to_temp_storage(blobid, hdcpupdatedate, patient_data):
                   "(HDCOrcaBlobId, HDCPUpdateDate, HDCPersonId, FirstName, MiddleName, LastName) "
                   "VALUES (%s, %s, %s, %s, %s, %s)")
     print("saving person info to temp storage for {}, {}: {}".format(blobid, hdcpupdatedate, patient_data[0]))
-    common_hooks.ANNOTATIONS_DB.run(insert_stmt, parameters=(blobid,
+    annotations_db = common_hooks.get_annotations_db_hook()
+    annotations_db.run(insert_stmt, parameters=(blobid,
                                                        hdcpupdatedate,
                                                        patient_data[0],
                                                        patient_data[1],
@@ -181,8 +183,10 @@ def annotate_clinical_notes(**kwargs):
             try:
                 note_metadata = common_functions.get_note_and_metadata_dict_from_source(blobid, hdcpupdatedate)
             except OperationalError as e:
+                if type(e) is not str:
+                    e = repr(e)
                 message = ("A OperationalError occurred while trying to fetch note metadata from source for"
-                           " for blobid: {blobid}".format(blobid=blobid))
+                           " for blobid: {blobid} \n {e}".format(blobid=blobid, e=e))
                 print(message)
                 common_functions.log_error_and_failure_for_deid_note_job(run_id,
                                                                          blobid,
@@ -194,8 +198,10 @@ def annotate_clinical_notes(**kwargs):
             try:
                 patient_data = common_functions.get_patient_data_from_source(note_metadata["patient_id"])
             except OperationalError as e:
+                if type(e) is not str:
+                    e = repr(e)
                 message = ("A OperationalError occurred while trying to fetch patient data"
-                      " for blobid: {blobid} and patientid: {pid}".format(blobid=blobid, pid=note_metadata["patient_id"]))
+                      " for blobid: {blobid} and patientid: {pid} \n {e}".format(blobid=blobid, pid=note_metadata["patient_id"], e=e))
                 print(message)
                 common_functions.log_error_and_failure_for_deid_note_job(run_id,
                                                                          blobid,
@@ -243,8 +249,10 @@ def annotate_clinical_notes(**kwargs):
                 save_note_to_temp_storage(blobid, hdcpupdatedate, note_metadata)
                 save_person_info_to_temp_storage(blobid, hdcpupdatedate, patient_data)
             except OperationalError as e:
+                if type(e) is not str:
+                    e = repr(e)
                 message = ("A OperationalError occurred while trying to save patient data"
-                           " for blobid: {blobid} ".format(blobid=blobid))
+                           " for blobid: {blobid} \n {e}".format(blobid=blobid, e=e))
                 print(message)
                 common_functions.log_error_and_failure_for_deid_note_job(run_id,
                                                                          blobid,
@@ -274,12 +282,14 @@ def annotate_clinical_notes(**kwargs):
 
 def save_deid_annotations(annotation_records):
     for blobid, record in annotation_records.items():
-        common_functions.save_deid_annotation(blobid, record['hdcpupdatedate'], str(record['annotated_note']))
+        if record:
+            common_functions.save_deid_annotation(blobid, record['hdcpupdatedate'], str(record['annotated_note']))
 
 
 def save_unreviewed_annotations(annotation_records):
     for blobid, record in annotation_records.items():
-        common_functions.save_unreviewed_annotation(blobid, record['hdcpupdatedate'], str(record['annotated_note']))
+        if record:
+            common_functions.save_unreviewed_annotation(blobid, record['hdcpupdatedate'], str(record['annotated_note']))
 
 
 def split_records_by_review_status(records):
@@ -287,6 +297,8 @@ def split_records_by_review_status(records):
     records_without_review = dict()
 
     for blobid, record in records.items():
+        if not record:
+            continue
         if _review_criterion(record):
             records_to_review[blobid] = record
         else:
