@@ -115,7 +115,7 @@ def annotate_clinical_notes(**kwargs):
 
         except OperationalError as e:
             message = ("A OperationalError occurred while trying to get person and note data from source for"
-                               " for blobid: {blobid}".format(blobid=blobid))
+                               " for blobid: {blobid} \n {e}".format(blobid=blobid, e=e))
             _log_failure_and_reqeue(message, "NOTE AND PERSON RETRIEVAL", run_id, blobid, hdcpupdatedate)
             continue
 

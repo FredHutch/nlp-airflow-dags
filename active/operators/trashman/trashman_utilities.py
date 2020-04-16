@@ -49,6 +49,7 @@ def parse_remote_output(remote_command_output, check_date):
 def safe_datetime_strp(time, fmt):
     try:
         end_date = datetime.strptime(time, fmt)
+        print("returned, stripped end_date was: {}".format(end_date))
     except ValueError as v:
         ulr = len(v.args[0].partition('unconverted data remains: ')[2])
         if ulr:
