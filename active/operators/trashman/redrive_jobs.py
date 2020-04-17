@@ -1,9 +1,4 @@
-import json
-from datetime import datetime, timedelta
 import utilities.common_variables as common_variables
-"""
-TODO: Implement redriving capabilities.
-"""
 
 
 def redrive_jobs(**kwargs):
@@ -21,7 +16,12 @@ def redrive_brat_stale_task(task):
     return
 
 
-def redrive_resynth_jobs(**kwargs):
+def redrive_resynth_jobs(upstream_task, **kwargs):
+    job_tuples =  kwargs['ti'].xcom_pull(task_ids=upstream_task, key=common_variables.REDRIVEABLE_RESYNTH_ID)
+
+    resynth_jobs = [(job['af3_runs_id'], job['annotation_creation_date']) for _, _, job in job_tuples]
+    kwargs['ti'].xcom_push(key=common_variables.RESYNTH_JOB_ID, value=resynth_jobs)
+
     return True
 
 

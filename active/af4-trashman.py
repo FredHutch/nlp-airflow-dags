@@ -8,6 +8,7 @@ from airflow.operators.python_operator import PythonOperator
 from airflow.models import DAG
 from airflow.utils.trigger_rule import TriggerRule
 import operators.trashman as trashman
+import operators.resynthesis as resynthesis
 
 DAG_NAME ='af4-trashman'
 
@@ -81,13 +82,20 @@ redrive_resynth_jobs = PythonOperator(task_id='redrive_resynth_jobs',
                                       op_args={'check_resynth_tasks'},
                                       dag=dag)
 
+resynthesize_notes_marked_as_deid = \
+    PythonOperator(task_id='resynthesize_notes_marked_as_deid',
+                   provide_context=True,
+                   python_callable=resynthesis.resynthesize_notes_marked_as_deid,
+                   op_args={'redrive_resynth_jobs'},
+                   dag=dag)
+
 #Brat Checks
 generate_job_id >> check_brat_staleness >> report_stale_brat_jobs >> send_stale_brat_email
 generate_job_id >> check_brat_completeness >> remove_complete_brat_jobs
 
 
 #Resynthesis Checks
-generate_job_id >> check_resynth_tasks >> redrive_resynth_jobs
+generate_job_id >> check_resynth_tasks >> redrive_resynth_jobs >> resynthesize_notes_marked_as_deid
 
 
-[report_stale_brat_jobs, remove_complete_brat_jobs, redrive_resynth_jobs] >> mark_job_complete
+[report_stale_brat_jobs, remove_complete_brat_jobs, resynthesize_notes_marked_as_deid] >> mark_job_complete

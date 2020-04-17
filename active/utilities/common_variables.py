@@ -50,14 +50,11 @@ NLP_BORT_FAILED = "BORT Failed"
 
 
 ################
-#Trashman Vars #
+# XCOM ID's    #
 ################
 
-REDRIVE_TASK_FN = {
-    'BRAT_STALE': True,
-    'RESYNTH': True,
-    'DEID': True
-}
+REDRIVEABLE_RESYNTH_ID = 'redriveable_resynth_tasks'
+RESYNTH_JOB_ID = 'resynth_jobs'
 
 ################
 #AF Table Names#

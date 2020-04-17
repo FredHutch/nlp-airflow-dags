@@ -1,1 +1,2 @@
 from .fetch_annotations import get_resynth_ready_annotations_since_date
+from .resynthesize_notes import resynthesize_notes_marked_as_deid
