@@ -31,7 +31,7 @@ def _get_complete_brat_notes_from_db(check_date):
                         "LEFT JOIN {job_table} as j "
                         "  ON b.{brat_id} = j.{brat_id} "
                         "WHERE b.job_status = '{complete_status}' "
-                        "AND b.brat_last_modified_date >=  dateadd(day,{threshold}},{current_date}) "
+                        "AND b.brat_last_modified_date >=  dateadd(day,{threshold},{current_date}) "
                         "AND j.{brat_id} is NULL ".format(brat_table=common_variables.AF4_SOURCE_BRAT_TABLE,
                                                         brat_id = common_variables.AF4_SOURCE_BRAT_ID,
                                                         job_table=common_variables.AF4_COMPLETE_BRAT_TABLE,
