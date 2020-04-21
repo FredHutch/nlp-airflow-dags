@@ -3,6 +3,7 @@ from collections import defaultdict
 import json
 import subprocess
 import base64
+from random import random
 
 from airflow.operators.python_operator import PythonOperator
 from airflow.models import DAG
@@ -234,7 +235,7 @@ def _log_failure_and_reqeue(message, error_type, run_id, blobid, hdcpupdatedate)
 def _review_criterion(record):
     # TODO: this is where annotation-specific logic should go for determining true (needs review)
     # TODO: or False (no review required)
-    if True:
+    if random() < .5:
         return True
 
     return False
