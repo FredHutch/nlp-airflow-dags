@@ -33,10 +33,10 @@ def parse_remote_output(remote_command_output, check_date):
             modified_date, path = datetime.strptime(split_string[0], '%Y-%m-%d'), split_string[1]
         except ValueError as e:
             common_functions.log_error_message(blobid="",
-                                     hdcpupdatedate="",
-                                     state="Brat DateTime Parsing",
+                                     state="Brat DateTime Parsing",                                     
                                      time=common_functions.generate_timestamp(),
-                                     error_message=e)
+                                     error_message=e,
+                                     hdcpupdatedate="")
             continue
         files = {
                  'File': path,
