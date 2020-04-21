@@ -11,6 +11,7 @@ def remove_complete_brat_jobs(upstream_task, **kwargs):
         exit(1)
     for remote_file in completed_files_dict:
         _remove_remote_file(remote_file['directory_location'])
+        _remove_remote_file(remote_file['directory_location'].replace('.ann','.txt'))
     kwargs['ti'].xcom_push(key='completed_job_id', value=run_id)
 
     return
