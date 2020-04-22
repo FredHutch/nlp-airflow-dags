@@ -10,7 +10,7 @@ def generate_job_id(**kwargs):
     """
     last_run_id = _get_last_bort_run_id()
     #TODO implement _get_last_bort_update_date()
-    last_bort_update_date = _get_last_bort_update_date()
+    last_bort_update_date = _get_last_resynth_update_date()
 
     if last_run_id is None:
         new_run_id = 1
@@ -24,8 +24,16 @@ def generate_job_id(**kwargs):
     # get last update date from source since last successful run
     # then pull record id with new update date from source
     job_start_date = datetime.now().strftime(common_variables.DT_FORMAT)[:-3]
+    bortdates = []
 
+    blob_job_queue = _get_blobs_since_date(date=last, job_state=common_variables.JOB_COMPLETE)
 
+    #check the queue for any new jobs that need to be scheduled
+    if blob_job_queue is None:
+      exit()
+    else:
+      for row in blob_job_queue:
+        bortdates.append(row[1])
     return new_run_id, bortdates
 
 
@@ -43,6 +51,12 @@ def _insert_bort_scheduled(run_id, update_date, job_start_date, **kwargs):
                               parameters=(run_id, common_variables.JOB_RUNNING, job_start_date, update_date))
 
     return
+
+def _get_blobs_since_date(date, job_state, **kwargs):
+  """
+  :param date:
+  :param job_state:
+  """
 
 def _get_last_bort_run_id(**kwargs):
     tgt_select_stmt = "SELECT max({run_id}) FROM {table}".format(table=common_variables.AF6_RUNS,
