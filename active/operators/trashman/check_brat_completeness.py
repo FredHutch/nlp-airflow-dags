@@ -37,7 +37,7 @@ def _get_complete_brat_notes_from_db(check_date):
                                                         brat_id = common_variables.AF4_SOURCE_BRAT_ID,
                                                         job_table=common_variables.AF4_COMPLETE_BRAT_TABLE,
                                                         complete_status=common_variables.BRAT_COMPLETE,
-                                                        current_date=check_date
+                                                        current_date=check_date,
                                                         threshold=common_variables.COMPLETE_STALE_THRESHOLD))
 
     completed_notes = (common_hooks.AIRFLOW_NLP_DB.get_records(src_select_stmt) or [])
