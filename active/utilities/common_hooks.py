@@ -82,7 +82,7 @@ STORAGE = 'SWIFT'
 #DB VARIABLES
 MYSTOR = __storage_writer[STORAGE](__bucket_dict[STORAGE][STAGE])
 ERROR_DB = __error_db_stage_dict[STAGE]
-#SOURCE_NOTE_DB = __source_note_db_stage_dict[STAGE]
+SOURCE_NOTE_DB = __source_note_db_stage_dict[STAGE]
 AIRFLOW_NLP_DB = __airflow_nlp_db_stage_dict[STAGE]
 #ANNOTATIONS_DB = __annotations_db_stage_dict[STAGE]
 DEID_NLP_API_HOOK = __deid_nlp_http_hook[STAGE]
