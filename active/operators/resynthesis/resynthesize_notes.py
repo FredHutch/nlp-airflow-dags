@@ -242,5 +242,5 @@ def _get_alias_data(patientid):
     al_select_stmt = ("SELECT FakeId, DateshiftDays, FirstName, MiddleName, LastName"
                       " FROM {table}"
                       " WHERE HDCPersonID = %s".format(table=common_variables.PatientMap))
-    return (common_hooks.SOURCE_NOTE_DB.get_first(al_select_stmt, parameters=(patientid,))
+    return (common_hooks.get_source_notes_db_hook().get_first(al_select_stmt, parameters=(patientid,))
             or (None, None, None, None, None))
