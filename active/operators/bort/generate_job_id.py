@@ -55,6 +55,7 @@ def _insert_bort_scheduled(run_id, update_date, job_start_date, **kwargs):
     return
 
 def _get_last_bort_run_id(**kwargs):
+    #TODO: Change SQL to change sqk stmt to use a join off of af5 instead of having a max bort date query 
     tgt_select_stmt = "SELECT max({run_id}) FROM {table}".format(table=common_variables.AF6_RUNS,
                                                                  run_id=common_variables.AF6_RUNS_ID)
     last_run_id = (common_hooks.AIRFLOW_NLP_DB.get_first(tgt_select_stmt) or (None,))
@@ -75,6 +76,7 @@ def _get_blobs_since_date(date, job_state, **kwargs):
 
 
 def _get_last_bort_update_date(**kwargs):
+    #TODO: Change SQL to change sqk stmt to use a join off of af5 instead of having a max bort date query 
     tgt_select_stmt = "SELECT max(bort_date) " \
                       "FROM {table} " \
                       "WHERE job_status = %s".format(table=common_variables.AF6_RUNS)
