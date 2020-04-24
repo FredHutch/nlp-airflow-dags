@@ -26,7 +26,7 @@ def generate_job_id(**kwargs):
     job_start_date = datetime.now().strftime(common_variables.DT_FORMAT)[:-3]
     bortdates = []
 
-    blob_job_queue = _get_blobs_since_date(date=last_bort_update_date, job_state=NLP)
+    blob_job_queue = _get_blobs_since_date(date=last_bort_update_date, job_state=common_variables.NLP_BORT_COMPLETE)
 
     if blob_job_queue is None:
         print("No new records found since last update date: {}".format(last_bort_update_date))
