@@ -51,7 +51,7 @@ def resynthesize_notes_marked_as_deid(upstream_task, **kwargs):
             for record in batch_records:
                 try:
                     # save json to db
-                    common_functions.save_resynthesis_annotation(blobid, hdcpupdatedate, str(record[blobid]))
+                    common_functions.save_resynthesis_annotation(blobid, hdcpupdatedate, json.dumps(record[blobid]))
                     json_obj_to_store = json.dumps({'resynthesized_notes': record[blobid]['text'],
                                                     'patient_pubid': fake_id,
                                                     'service_date': service_dts[blobid].strftime(

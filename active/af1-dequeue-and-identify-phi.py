@@ -182,7 +182,7 @@ def annotate_clinical_notes(**kwargs):
 
         for blobid, record in to_review_by_assignee.items():
             try:
-                common_functions.save_deid_annotation(blobid, record['hdcpupdatedate'], str(record['annotated_note']))
+                common_functions.save_deid_annotation(blobid, record['hdcpupdatedate'], json.dumps(record['annotated_note']))
 
             except OperationalError as e:
                 message = ("A OperationalError occurred while trying to store deid annotations to source for"
@@ -195,7 +195,7 @@ def annotate_clinical_notes(**kwargs):
     # Notes Without Review
     for blobid, record in skip_review.items():
         try:
-            common_functions.save_unreviewed_annotation(blobid, record['hdcpupdatedate'], str(record['annotated_note']))
+            common_functions.save_unreviewed_annotation(blobid, record['hdcpupdatedate'], json.dumps(record['annotated_note']))
         except OperationalError as e:
             message = ("A OperationalError occurred while trying to store unreviewed deid annotations to source for"
                        " for blobid: {blobid} {error}".format(blobid=blobid, error=e))
