@@ -36,7 +36,7 @@ def generate_job_id(**kwargs):
             bortdates.append(row[1])
             _insert_bort_scheduled(new_run_id, row[1], job_start_date)
 
-        print("{} new update batches found since last update date: {}".format(len(bort_dates)
+        print("{} new update batches found since last update date: {}".format(len(bort_dates)))
     return new_run_id, bortdates
 
 def _insert_bort_scheduled(run_id, update_date, job_start_date, **kwargs):
